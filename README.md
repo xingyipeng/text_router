@@ -118,6 +118,26 @@ npm test        # 后端全部单元与集成测试
 SUPER_ADMIN_USER=root SUPER_ADMIN_PASSWORD=password1234 npm run dev
 ```
 
+### 切换 Node 版本后必须 npm rebuild
+
+`better-sqlite3` 是原生模块，编译产物和安装时的 Node 版本 ABI 绑死。用 fnm/nvm 切了 Node 大版本之后，测试会整片失败并报：
+
+```
+The module '.../better_sqlite3.node' was compiled against a different
+Node.js version using NODE_MODULE_VERSION 131. This version of Node.js
+requires NODE_MODULE_VERSION 127.
+```
+
+这不是代码问题，执行一次即可：
+
+```bash
+npm rebuild better-sqlite3
+```
+
+**Docker 不受影响** —— 镜像里的 `npm ci` 是在 `node:22-slim` 内执行的，天然对准生产的 Node 版本。
+
+测试已在 **Node 22.21.1**（与 Dockerfile 同大版本）和 **Node 23.10.0** 上分别跑通，178 项全过。
+
 前端是原生 HTML/JS，无构建步骤，改完刷新即可。
 
 **前端没有自动化测试覆盖**，改动后需要手动验证：登录、增删改查、拖拽导入、自检、回收站恢复、用户管理、诊断面板。后端有完整测试，可以放心重构。
