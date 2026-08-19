@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>微信校验文件管理</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='14' font-size='14'>📄</text></svg>">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+
+<section id="login-view" hidden>
+  <form id="login-form" class="card">
+    <h1>微信校验文件管理</h1>
+    <label>用户名 <input name="username" autocomplete="username" required></label>
+    <label>密码 <input name="password" type="password" autocomplete="current-password" required></label>
+    <button type="submit">登录</button>
+    <p class="error" id="login-error"></p>
+  </form>
+</section>
+
+<section id="main-view" hidden>
+  <header>
+    <h1>微信校验文件管理</h1>
+    <nav>
+      <button data-tab="files" class="tab active">校验文件</button>
+      <button data-tab="trash" class="tab">回收站</button>
+      <button data-tab="users" class="tab" id="tab-users" hidden>用户</button>
+      <button data-tab="diag" class="tab">诊断</button>
+    </nav>
+    <div class="who">
+      <span id="me-name"></span>
+      <button id="btn-password" class="link">改密码</button>
+      <button id="btn-logout" class="link">退出</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="panel-files" class="panel">
+      <div class="toolbar">
+        <input id="f-host" placeholder="按域名筛选">
+        <input id="f-q" placeholder="搜索文件名或备注">
+        <select id="f-by"><option value="">全部操作人</option></select>
+        <button id="btn-new">新增校验文件</button>
+      </div>
+      <table id="files-table">
+        <thead><tr>
+          <th>域名</th><th>文件名</th><th>备注</th><th>创建人</th><th>最后修改</th><th>操作</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="empty" hidden>暂无记录</p>
+    </div>
+
+    <div id="panel-trash" class="panel" hidden>
+      <table id="trash-table">
+        <thead><tr>
+          <th>域名</th><th>文件名</th><th>备注</th><th>删除人</th><th>删除时间</th><th>操作</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="empty" hidden>回收站为空</p>
+    </div>
+
+    <div id="panel-users" class="panel" hidden>
+      <div class="toolbar">
+        <button id="btn-new-user">新增用户</button>
+        <label class="inline"><input type="checkbox" id="u-show-disabled"> 显示已禁用</label>
+      </div>
+      <table id="users-table">
+        <thead><tr>
+          <th>用户名</th><th>显示名</th><th>角色</th><th>状态</th><th>创建时间</th><th>操作</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+
+    <div id="panel-diag" class="panel" hidden>
+      <div class="toolbar">
+        <button id="btn-refresh-diag">刷新</button>
+        <span class="hint">最近 200 次 .txt 请求，仅存于内存，重启即清空</span>
+      </div>
+      <table id="diag-table">
+        <thead><tr>
+          <th>时间</th><th>Host 头</th><th>X-Forwarded-Host</th><th>解析后</th><th>路径</th><th>结果</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+      <p class="empty" hidden>还没有收到任何 .txt 请求</p>
+    </div>
+  </main>
+</section>
+
+<dialog id="file-dialog">
+  <form id="file-form" method="dialog">
+    <h2 id="file-dialog-title">新增校验文件</h2>
+    <div id="dropzone">把从微信后台下载的 .txt 文件拖到这里，自动填充</div>
+    <label>域名
+      <input name="host" placeholder="留空表示对所有域名生效">
+    </label>
+    <label>文件名
+      <input name="filename" required placeholder="MP_verify_xxxxxxxx.txt">
+    </label>
+    <label>内容
+      <textarea name="content" rows="3" required></textarea>
+    </label>
+    <p id="content-warnings" class="warn"></p>
+    <label>备注
+      <input name="note" placeholder="属于哪个公众号 / 小程序 / 项目">
+    </label>
+    <p class="error" id="file-error"></p>
+    <menu>
+      <button value="cancel" type="button" id="file-cancel">取消</button>
+      <button value="save" type="submit">保存</button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="password-dialog">
+  <form id="password-form" method="dialog">
+    <h2>修改我的密码</h2>
+    <label>当前密码 <input name="old_password" type="password" required></label>
+    <label>新密码 <input name="new_password" type="password" required minlength="12"></label>
+    <p class="error" id="password-error"></p>
+    <menu>
+      <button value="cancel" type="button" id="password-cancel">取消</button>
+      <button value="save" type="submit">保存</button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="user-dialog">
+  <form id="user-form" method="dialog">
+    <h2>新增用户</h2>
+    <label>用户名 <input name="username" required></label>
+    <label>显示名 <input name="display_name"></label>
+    <label>初始密码 <input name="password" type="password" required minlength="12"></label>
+    <p class="error" id="user-error"></p>
+    <menu>
+      <button value="cancel" type="button" id="user-cancel">取消</button>
+      <button value="save" type="submit">创建</button>
+    </menu>
+  </form>
+</dialog>
+
+<div id="toast" hidden></div>
+
+<script type="module" src="/main.js"></script>
+</body>
+</html>
