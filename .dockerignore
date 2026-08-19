@@ -1,0 +1,10 @@
+node_modules
+data
+.git
+.gitignore
+docs
+test
+vitest.config.js
+*.md
+.env
+.omc

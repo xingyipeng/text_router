@@ -1,0 +1,15 @@
+services:
+  wx_router:
+    build: .
+    container_name: wx_router
+    restart: unless-stopped
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - ./data:/app/data
+    environment:
+      DATA_DIR: /app/data
+      SESSION_TTL_HOURS: "${SESSION_TTL_HOURS:-168}"
+      COOKIE_SECURE: "${COOKIE_SECURE:-false}"
+      SUPER_ADMIN_USER: "${SUPER_ADMIN_USER:-}"
+      SUPER_ADMIN_PASSWORD: "${SUPER_ADMIN_PASSWORD:-}"
