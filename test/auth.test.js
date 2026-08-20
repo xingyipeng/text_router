@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openDb } from '../src/db.js';
 import { createUser, disableUser } from '../src/repo/users.js';
-import { createDiagnostics } from '../src/diagnostics.js';
+import { createRequestLog } from '../src/requestlog.js';
 import { createApp } from '../src/app.js';
 
 let dir, db, app;
@@ -14,7 +14,7 @@ beforeEach(() => {
   db = openDb(join(dir, 'test.db'));
   app = createApp({
     db,
-    diagnostics: createDiagnostics(),
+    requestLog: createRequestLog(),
     config: { sessionTtlHours: 24, cookieSecure: false },
   });
   createUser(db, { username: 'alice', password: 'password1234', displayName: 'Alice' });

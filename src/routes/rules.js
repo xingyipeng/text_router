@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import {
-  createFile, updateFile, getFile, listFiles, softDeleteFile, restoreFile,
-} from '../repo/files.js';
+  createFile, updateFile, getFile, listFiles, softDeleteFile, restoreFile, listMeta,
+} from '../repo/rules.js';
 import { UniqueViolation } from '../repo/errors.js';
 import {
   isValidFilename, normalizeHost, inspectContent, MAX_CONTENT_BYTES,
@@ -33,7 +33,7 @@ function withInspect(row) {
   return { ...row, inspect: inspectContent(row.content) };
 }
 
-export function createFileRoutes({ db, fetchImpl }) {
+export function createRulesRoutes({ db, fetchImpl }) {
   const router = new Hono();
   router.use('*', requireAuth);
 
@@ -43,10 +43,15 @@ export function createFileRoutes({ db, fetchImpl }) {
       host: q.host ? normalizeHost(q.host) : undefined,
       q: q.q || undefined,
       by: q.by ? Number(q.by) : undefined,
+      sort: q.sort || undefined,
+      dir: q.dir || undefined,
       includeDeleted: q.include_deleted === '1',
+      onlyGlobal: q.only_global === '1',
     });
     return c.json(rows.map(withInspect));
   });
+
+  router.get('/meta', (c) => c.json(listMeta(db)));
 
   router.post('/', async (c) => {
     let body;
@@ -58,7 +63,7 @@ export function createFileRoutes({ db, fetchImpl }) {
       return c.json(withInspect(createFile(db, { ...value, userId: c.get('user').id })), 201);
     } catch (err) {
       if (err instanceof UniqueViolation) {
-        return c.json({ error: '该域名下已存在同名文件，请改为编辑那一条' }, 409);
+        return c.json({ error: '该域名下已存在同名规则，请改为编辑那一条' }, 409);
       }
       throw err;
     }
@@ -78,7 +83,7 @@ export function createFileRoutes({ db, fetchImpl }) {
       return c.json(withInspect(updateFile(db, id, { ...value, userId: c.get('user').id })));
     } catch (err) {
       if (err instanceof UniqueViolation) {
-        return c.json({ error: '该域名下已存在同名文件' }, 409);
+        return c.json({ error: '该域名下已存在同名规则' }, 409);
       }
       throw err;
     }
@@ -102,7 +107,7 @@ export function createFileRoutes({ db, fetchImpl }) {
       return c.json(withInspect(restoreFile(db, id, c.get('user').id)));
     } catch (err) {
       if (err instanceof UniqueViolation) {
-        return c.json({ error: '同名文件已重新创建，无法恢复。请先处理现有的那一条' }, 409);
+        return c.json({ error: '同名规则已重新创建，无法恢复。请先处理现有的那一条' }, 409);
       }
       throw err;
     }

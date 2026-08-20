@@ -1,4 +1,5 @@
 import { wrapUnique } from './errors.js';
+import { listUsers } from './users.js';
 
 const SELECT_WITH_USERS = `
   SELECT f.*,
@@ -23,7 +24,7 @@ export function createFile(db, { host, filename, content, note = '', userId }) {
   return getFile(db, info.lastInsertRowid);
 }
 
-export function updateFile(db, id, { host, filename, content, note, userId }) {
+export function updateFile(db, id, { host, filename, content, note = '', userId }) {
   wrapUnique(() =>
     db.prepare(`
       UPDATE verify_files
@@ -57,6 +58,17 @@ export function restoreFile(db, id, userId) {
   return getFile(db, id);
 }
 
+// 筛选器元数据：活跃域名（含删除记录中的域名会被隐藏）与操作人。
+// 操作人 = 用户列表中状态正常的用户（与「用户」页一致），不随文件记录变化。
+export function listMeta(db) {
+  const hosts = db.prepare(`
+    SELECT DISTINCT host FROM verify_files
+    WHERE deleted_at IS NULL AND host != ''
+    ORDER BY host ASC
+  `).all().map((r) => r.host);
+  return { hosts, persons: listUsers(db) };
+}
+
 export function matchFile(db, host, filename) {
   return db.prepare(`
     SELECT id, content FROM verify_files
@@ -66,22 +78,43 @@ export function matchFile(db, host, filename) {
   `).get(filename, host);
 }
 
-export function listFiles(db, { host, q, by, includeDeleted = false } = {}) {
+const SORTS = {
+  updated: { expr: 'f.updated_at', defaultDir: 'DESC' },
+  host: { expr: 'f.host, f.filename', defaultDir: 'ASC' },
+  filename: { expr: 'f.filename, f.host', defaultDir: 'ASC' },
+  created: { expr: 'f.created_at', defaultDir: 'DESC' },
+  created_by: { expr: 'cu.username, f.created_at', defaultDir: 'ASC' },
+};
+
+// 把用户输入里的 LIKE 通配符转义掉，让搜索按字面量匹配
+function likePattern(q) {
+  return `%${q.replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
+}
+
+export function listFiles(db, { host, q, by, sort = 'updated', dir, includeDeleted = false, onlyGlobal = false } = {}) {
   const where = [];
   const params = [];
   if (!includeDeleted) where.push('f.deleted_at IS NULL');
-  if (host !== undefined && host !== null && host !== '') {
-    where.push('f.host = ?');
+  if (onlyGlobal) {
+    // 只看全局记录（空域名）
+    where.push("f.host = ''");
+  } else if (host !== undefined && host !== null && host !== '') {
+    // 选具体域名时带上全局记录：全局文件对该域名同样生效
+    where.push("(f.host = ? OR f.host = '')");
     params.push(host);
   }
   if (q) {
-    where.push('(f.filename LIKE ? OR f.note LIKE ?)');
-    params.push(`%${q}%`, `%${q}%`);
+    where.push("(f.filename LIKE ? ESCAPE '\\' OR f.note LIKE ? ESCAPE '\\' OR f.content LIKE ? ESCAPE '\\')");
+    params.push(likePattern(q), likePattern(q), likePattern(q));
   }
   if (by) {
     where.push('(f.created_by = ? OR f.updated_by = ?)');
     params.push(by, by);
   }
   const clause = where.length ? `WHERE ${where.join(' AND ')}` : '';
-  return db.prepare(`${SELECT_WITH_USERS} ${clause} ORDER BY f.updated_at DESC`).all(...params);
+  const s = SORTS[sort] || SORTS.updated;
+  const direction = dir === 'asc' || dir === 'desc' ? dir.toUpperCase() : s.defaultDir;
+  // SQL 的方向只作用于单个表达式，多列排序（含并列次序）需逐列加上方向
+  const orderBy = s.expr.split(',').map((col) => `${col} ${direction}`).join(', ');
+  return db.prepare(`${SELECT_WITH_USERS} ${clause} ORDER BY ${orderBy}`).all(...params);
 }

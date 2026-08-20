@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openDb } from '../src/db.js';
 import { createUser } from '../src/repo/users.js';
-import { createDiagnostics } from '../src/diagnostics.js';
+import { createRequestLog } from '../src/requestlog.js';
 import { createApp } from '../src/app.js';
 
 let dir, db, app, superCookie, plainCookie;
@@ -23,7 +23,7 @@ beforeEach(async () => {
   db = openDb(join(dir, 'test.db'));
   app = createApp({
     db,
-    diagnostics: createDiagnostics(),
+    requestLog: createRequestLog(),
     config: { sessionTtlHours: 24, cookieSecure: false },
   });
   createUser(db, { username: 'root', password: 'password1234', isSuper: true });
@@ -102,6 +102,81 @@ describe('POST /api/users', () => {
   });
 });
 
+describe('PUT /api/users/:id', () => {
+  it('同时修改显示名与用户名，旧用户名不可登录、新用户名可登录', async () => {
+    const users = await (await as(superCookie)('/api/users')).json();
+    const alice = users.find(u => u.username === 'alice');
+    const res = await as(superCookie)(`/api/users/${alice.id}`, 'PUT',
+      { username: 'alice2', display_name: '爱丽丝' });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.username).toBe('alice2');
+    expect(body.display_name).toBe('爱丽丝');
+    expect(await loginAs('alice2', 'password1234')).toMatch(/^sid=/);
+    const oldLogin = await app.request('/api/auth/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', host: 'admin.local' },
+      body: JSON.stringify({ username: 'alice', password: 'password1234' }),
+    });
+    expect(oldLogin.status).toBe(401);
+  });
+
+  it('改名不影响既有会话', async () => {
+    const users = await (await as(superCookie)('/api/users')).json();
+    const alice = users.find(u => u.username === 'alice');
+    await as(superCookie)(`/api/users/${alice.id}`, 'PUT', { username: 'alice2' });
+    expect((await as(plainCookie)('/api/rules')).status).toBe(200);
+  });
+
+  it('只传显示名时用户名保持不变', async () => {
+    const users = await (await as(superCookie)('/api/users')).json();
+    const alice = users.find(u => u.username === 'alice');
+    const res = await as(superCookie)(`/api/users/${alice.id}`, 'PUT',
+      { display_name: '新名字' });
+    expect((await res.json()).username).toBe('alice');
+  });
+
+  it('改为同名（未变化）返回 200', async () => {
+    const users = await (await as(superCookie)('/api/users')).json();
+    const alice = users.find(u => u.username === 'alice');
+    expect((await as(superCookie)(`/api/users/${alice.id}`, 'PUT',
+      { username: 'alice' })).status).toBe(200);
+  });
+
+  it('用户名冲突返回 409', async () => {
+    const users = await (await as(superCookie)('/api/users')).json();
+    const alice = users.find(u => u.username === 'alice');
+    expect((await as(superCookie)(`/api/users/${alice.id}`, 'PUT',
+      { username: 'root' })).status).toBe(409);
+  });
+
+  it('非法用户名返回 400', async () => {
+    const users = await (await as(superCookie)('/api/users')).json();
+    const alice = users.find(u => u.username === 'alice');
+    for (const username of ['', '有 空格', 'a'.repeat(65)]) {
+      expect((await as(superCookie)(`/api/users/${alice.id}`, 'PUT',
+        { username })).status, username).toBe(400);
+    }
+  });
+
+  it('空 body 与非字符串显示名返回 400', async () => {
+    const users = await (await as(superCookie)('/api/users')).json();
+    const alice = users.find(u => u.username === 'alice');
+    expect((await as(superCookie)(`/api/users/${alice.id}`, 'PUT', {})).status).toBe(400);
+    expect((await as(superCookie)(`/api/users/${alice.id}`, 'PUT',
+      { display_name: 123 })).status).toBe(400);
+  });
+
+  it('不存在的 id 返回 404', async () => {
+    expect((await as(superCookie)('/api/users/9999', 'PUT',
+      { username: 'x' })).status).toBe(404);
+  });
+
+  it('普通用户无权修改返回 403', async () => {
+    expect((await as(plainCookie)('/api/users/1', 'PUT', {})).status).toBe(403);
+  });
+});
+
 describe('DELETE /api/users/:id', () => {
   it('禁用普通用户返回 204，之后无法登录', async () => {
     const users = await (await as(superCookie)('/api/users')).json();
@@ -119,7 +194,7 @@ describe('DELETE /api/users/:id', () => {
     const users = await (await as(superCookie)('/api/users')).json();
     const alice = users.find(u => u.username === 'alice');
     await as(superCookie)(`/api/users/${alice.id}`, 'DELETE');
-    expect((await as(plainCookie)('/api/files')).status).toBe(401);
+    expect((await as(plainCookie)('/api/rules')).status).toBe(401);
   });
 
   it('删除超级管理员返回 403', async () => {
@@ -165,7 +240,7 @@ describe('POST /api/users/:id/password', () => {
     const alice = users.find(u => u.username === 'alice');
     await as(superCookie)(`/api/users/${alice.id}/password`, 'POST',
       { new_password: 'resetpassword99' });
-    expect((await as(plainCookie)('/api/files')).status).toBe(401);
+    expect((await as(plainCookie)('/api/rules')).status).toBe(401);
   });
 
   it('新密码过短返回 400', async () => {

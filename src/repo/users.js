@@ -18,6 +18,19 @@ export function getUser(db, id) {
   return db.prepare(`SELECT ${SAFE_COLUMNS} FROM users WHERE id = ?`).get(id);
 }
 
+// 只更新传入的字段（undefined 保持原值）；用户名冲突抛 UniqueViolation
+export function updateUser(db, id, { username, displayName } = {}) {
+  wrapUnique(() =>
+    db.prepare(`
+      UPDATE users
+      SET username = COALESCE(?, username),
+          display_name = COALESCE(?, display_name)
+      WHERE id = ?
+    `).run(username ?? null, displayName ?? null, id)
+  );
+  return getUser(db, id);
+}
+
 export function findActiveByUsername(db, username) {
   return db.prepare('SELECT * FROM users WHERE username = ? AND disabled_at IS NULL').get(username);
 }

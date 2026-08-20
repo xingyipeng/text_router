@@ -3,23 +3,34 @@ import { serveStatic } from '@hono/node-server/serve-static';
 import { createVerifyHandler } from './verify.js';
 import { sessionMiddleware } from './auth.js';
 import { createAuthRoutes } from './routes/auth.js';
-import { createFileRoutes } from './routes/files.js';
+import { createRulesRoutes } from './routes/rules.js';
 import { createUserRoutes } from './routes/users.js';
-import { createDiagnosticsRoutes } from './routes/diagnostics.js';
+import { createRequestLogRoutes } from './routes/requestlog.js';
+import { createStatsRoutes } from './routes/stats.js';
+import { createBackupRoutes } from './routes/backup.js';
 
-export function createApp({ db, diagnostics, config }) {
+export function createApp({ db, requestLog, config }) {
   const app = new Hono();
 
   // 校验文件响应：公开路径，不经过任何鉴权中间件
-  app.get('/:filename{[^/]+\\.txt}', createVerifyHandler({ db, diagnostics }));
+  app.get('/:filename{[^/]+\\.txt}', createVerifyHandler({ db, requestLog }));
 
   app.use('/api/*', sessionMiddleware({ db }));
   app.route('/api/auth', createAuthRoutes({ db, config }));
-  app.route('/api/files', createFileRoutes({ db, fetchImpl: config.fetchImpl }));
+  app.route('/api/rules', createRulesRoutes({ db, fetchImpl: config.fetchImpl }));
   app.route('/api/users', createUserRoutes({ db }));
-  app.route('/api/diagnostics', createDiagnosticsRoutes({ diagnostics }));
+  app.route('/api/request-log', createRequestLogRoutes({ requestLog }));
+  app.route('/api/stats', createStatsRoutes({ db, requestLog }));
+  app.route('/api/backups', createBackupRoutes({ db, config }));
 
   if (config.staticRoot) {
+    // 静态文件体积都很小，要求浏览器每次重新校验，改版后无需手动强刷
+    app.use('/*', async (c, next) => {
+      await next();
+      if (!c.res.headers.get('cache-control')) {
+        c.res.headers.set('Cache-Control', 'no-cache');
+      }
+    });
     app.use('/*', serveStatic({ root: config.staticRoot }));
   }
 

@@ -1,0 +1,354 @@
+import { $, api, toast, fmtTime, personLabel, escapeHtml, listeners, confirmDialog } from './app.js';
+
+const filters = { host: '', q: '', by: '', sort: 'updated', dir: 'desc' };
+// 各排序键的默认方向：时间类默认新→旧，文本类默认 A→Z
+const SORT_DEFAULT_DIRS = { updated: 'desc', created: 'desc', host: 'asc', filename: 'asc', created_by: 'asc' };
+let editingId = null;
+// 筛选器元数据：全部现有域名与全部操作人（来自 /api/rules/meta，独立于当前筛选结果）
+let meta = { hosts: [], persons: [] };
+
+const ICONS = {
+  check: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M8 1.5l4.5 1.8v3.9c0 3.2-1.9 5.5-4.5 6.4-2.6-.9-4.5-3.2-4.5-6.4V3.3z"/><path d="M5.8 8l1.6 1.6 2.8-3"/></svg>',
+  edit: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M11.3 2.3l2.4 2.4L5.5 13H3v-2.5z"/></svg>',
+  del: '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2.5 4h11M6.5 2h3M4 4l.7 9.5h6.6L12 4M6.5 6.5v4.5M9.5 6.5v4.5"/></svg>',
+};
+
+const CHECK_HINTS = {
+  OK: '线上完全正常',
+  NO_HOST: '全局记录，无法自动验证',
+  EGRESS_BLOCKED: '本机无法出网，外部验证不可用',
+  DNS_OR_CONNECT_FAILED: '域名解析或连接失败',
+  REDIRECTED: '被重定向，微信不接受',
+  STATUS_NOT_200: '状态码不是 200',
+  CONTENT_TYPE_WRONG: 'Content-Type 不是 text/plain',
+  CONTENT_MISMATCH: '线上内容与库中不一致',
+};
+
+async function loadRules() {
+  const panel = $('#panel-rules');
+  panel.classList.add('loading');
+  try {
+    const qs = new URLSearchParams();
+    if (filters.host === '__global__') qs.set('only_global', '1');
+    else if (filters.host) qs.set('host', filters.host);
+    if (filters.q) qs.set('q', filters.q);
+    if (filters.by) qs.set('by', filters.by);
+    if (filters.sort) qs.set('sort', filters.sort);
+    if (filters.dir) qs.set('dir', filters.dir);
+    const rows = await api(`/api/rules?${qs}`);
+    renderRules(rows);
+  } finally {
+    panel.classList.remove('loading');
+  }
+}
+
+// 加载筛选器元数据（域名下拉 + 操作人下拉），与当前筛选结果无关。
+// 数据变化（增删改、恢复）后调用一次即可保持下拉最新。
+async function loadMeta() {
+  meta = await api('/api/rules/meta');
+  renderHostFilter();
+  renderPeopleFilter();
+}
+
+function renderRules(rows) {
+  const tbody = $('#rules-table tbody');
+  tbody.innerHTML = '';
+  $('#panel-rules .empty').hidden = rows.length > 0;
+  $('#r-count').textContent = rows.length ? `共 ${rows.length} 条` : '';
+
+  rows.forEach((r, i) => {
+    const tr = document.createElement('tr');
+    tr.style.setProperty('--i', i); // 行入场错峰（纯展示）
+    tr.innerHTML = `
+      <td class="mono">${r.host ? escapeHtml(r.host) : '<em>全部域名</em>'}</td>
+      <td class="mono">${escapeHtml(r.filename)}</td>
+      <td>${escapeHtml(r.note)}</td>
+      <td>${escapeHtml(personLabel(r.created_by_username, r.created_by_name))}</td>
+      <td>${escapeHtml(personLabel(r.updated_by_username, r.updated_by_name))}<br>
+          <small>${fmtTime(r.updated_at)}</small></td>
+      <td class="actions">
+        <button class="btn sm" data-act="check" title="自检">${ICONS.check}自检</button>
+        <button class="btn sm" data-act="edit" title="编辑">${ICONS.edit}编辑</button>
+        <button class="btn sm danger" data-act="delete" title="删除">${ICONS.del}删除</button>
+      </td>`;
+    tr.dataset.id = r.id;
+    tr.dataset.row = JSON.stringify(r);
+    tbody.append(tr);
+  });
+}
+
+function renderHostFilter() {
+  const sel = $('#r-host');
+  const current = sel.value;
+  sel.innerHTML =
+    '<option value="">全部域名</option>' +
+    '<option value="__global__">全局（未指定域名）</option>';
+  for (const host of meta.hosts) {
+    const o = document.createElement('option');
+    o.value = host;
+    o.textContent = host;
+    sel.append(o);
+  }
+  sel.value = current;
+}
+
+function renderPeopleFilter() {
+  const sel = $('#r-by');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">全部操作人</option>';
+  for (const p of meta.persons) {
+    const o = document.createElement('option');
+    o.value = p.id;
+    o.textContent = personLabel(p.username, p.display_name);
+    sel.append(o);
+  }
+  sel.value = current;
+}
+
+function openDialog(row) {
+  editingId = row ? row.id : null;
+  $('#rule-dialog-title').textContent = row ? '编辑规则' : '新增规则';
+  const f = $('#rule-form');
+  f.host.value = row?.host ?? '';
+  f.filename.value = row?.filename ?? '';
+  f.content.value = row?.content ?? '';
+  f.note.value = row?.note ?? '';
+  $('#rule-error').textContent = '';
+  updateWarnings();
+  $('#rule-dialog').showModal();
+}
+
+function updateWarnings() {
+  const v = $('#rule-form').content.value;
+  const bytes = new TextEncoder().encode(v).length;
+  const w = [];
+  if (v.charCodeAt(0) === 0xfeff) w.push('含 BOM');
+  if (v.includes('\r\n')) w.push('含 CRLF 换行');
+  if (/^\s/.test(v)) w.push('首部有空白');
+  if (/\s$/.test(v)) w.push('尾部有空白');
+  $('#content-warnings').innerHTML = w.length
+    ? `⚠ ${w.join('、')}（${bytes} 字节）　<button type="button" class="link" id="btn-clean">一键清理</button>`
+    : `${bytes} 字节`;
+}
+
+async function loadTrash() {
+  const panel = $('#panel-trash');
+  panel.classList.add('loading');
+  let rows;
+  try {
+    rows = (await api('/api/rules?include_deleted=1')).filter((r) => r.deleted_at);
+  } finally {
+    panel.classList.remove('loading');
+  }
+  const tbody = $('#trash-table tbody');
+  tbody.innerHTML = '';
+  $('#panel-trash .empty').hidden = rows.length > 0;
+  rows.forEach((r, i) => {
+    const tr = document.createElement('tr');
+    tr.className = 'deleted';
+    tr.style.setProperty('--i', i); // 行入场错峰（纯展示）
+    tr.innerHTML = `
+      <td class="mono">${r.host ? escapeHtml(r.host) : '<em>全部域名</em>'}</td>
+      <td class="mono">${escapeHtml(r.filename)}</td>
+      <td>${escapeHtml(r.note)}</td>
+      <td>${escapeHtml(personLabel(r.deleted_by_username, r.deleted_by_name))}</td>
+      <td>${fmtTime(r.deleted_at)}</td>
+      <td><button class="btn sm" data-act="restore">恢复</button></td>`;
+    tr.dataset.id = r.id;
+    tbody.append(tr);
+  });
+}
+
+// —— 事件绑定 ——
+
+const debounce = (fn, ms) => {
+  let t;
+  return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); };
+};
+
+// 关键词搜索输入框：防抖 + 清除按钮
+{
+  const input = $('#r-q');
+  const btn = $(`button[data-clear="q"]`);
+  const apply = debounce(() => {
+    filters.q = input.value.trim();
+    btn.hidden = !input.value;
+    loadRules();
+  }, 250);
+  input.addEventListener('input', apply);
+  btn.addEventListener('click', () => {
+    input.value = '';
+    btn.hidden = true;
+    filters.q = '';
+    loadRules();
+    input.focus();
+  });
+}
+$('#r-host').addEventListener('change', (e) => { filters.host = e.target.value; loadRules(); });
+$('#r-by').addEventListener('change', (e) => { filters.by = e.target.value; loadRules(); });
+
+// 表头点击排序：点当前排序列切换升降序，点其他列切换为该列（按其默认方向）
+function renderSortState() {
+  $('#rules-table').querySelectorAll('th.sortable').forEach((th) => {
+    const active = th.dataset.sort === filters.sort;
+    th.classList.toggle('sort-asc', active && filters.dir === 'asc');
+    th.classList.toggle('sort-desc', active && filters.dir === 'desc');
+  });
+}
+$('#rules-table thead').addEventListener('click', (e) => {
+  const th = e.target.closest('th.sortable');
+  if (!th) return;
+  const key = th.dataset.sort;
+  if (filters.sort === key) {
+    filters.dir = filters.dir === 'asc' ? 'desc' : 'asc';
+  } else {
+    filters.sort = key;
+    filters.dir = SORT_DEFAULT_DIRS[key] || 'asc';
+  }
+  renderSortState();
+  loadRules();
+});
+renderSortState();
+$('#btn-new').addEventListener('click', () => openDialog(null));
+$('#rule-cancel').addEventListener('click', () => $('#rule-dialog').close());
+$('#rule-form').content.addEventListener('input', updateWarnings);
+
+$('#content-warnings').addEventListener('click', (e) => {
+  if (e.target.id !== 'btn-clean') return;
+  const f = $('#rule-form');
+  f.content.value = f.content.value
+    .replace(/^\uFEFF/, '')
+    .replace(/\r\n/g, '\n')
+    .trim();
+  updateWarnings();
+});
+
+$('#rule-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const f = e.target;
+  const body = {
+    host: f.host.value.trim(),
+    filename: f.filename.value.trim(),
+    content: f.content.value,
+    note: f.note.value.trim(),
+  };
+  $('#rule-error').textContent = '';
+  try {
+    if (editingId) await api(`/api/rules/${editingId}`, { method: 'PUT', body });
+    else await api('/api/rules', { method: 'POST', body });
+    $('#rule-dialog').close();
+    toast(editingId ? '已保存' : '已新增');
+    loadRules();
+    loadMeta(); // 域名/操作人下拉可能变化
+  } catch (err) {
+    $('#rule-error').textContent = err.message;
+  }
+});
+
+$('#rules-table').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-act]');
+  if (!btn) return;
+  const tr = btn.closest('tr');
+  const row = JSON.parse(tr.dataset.row);
+
+  if (btn.dataset.act === 'edit') return openDialog(row);
+
+  if (btn.dataset.act === 'delete') {
+    const ok = await confirmDialog({
+      title: '删除规则',
+      message: `确定删除 ${row.filename}？删除后微信将无法抓取到它，可在回收站恢复。`,
+      okText: '删除',
+      danger: true,
+    });
+    if (!ok) return;
+    await api(`/api/rules/${row.id}`, { method: 'DELETE' });
+    toast('已移入回收站');
+    tr.classList.add('removing'); // 行淡出后刷新（纯展示）
+    setTimeout(loadRules, 240);
+    loadMeta();
+    return;
+  }
+
+  if (btn.dataset.act === 'check') {
+    // 结果放在独立的整行（colspan）里，避免撑宽「操作」列、拉伸表格
+    const tbody = tr.parentElement;
+    tbody.querySelectorAll('tr.check-row').forEach((r) => r.remove());
+    const checkRow = document.createElement('tr');
+    checkRow.className = 'check-row';
+    const td = document.createElement('td');
+    td.colSpan = 6;
+    const box = document.createElement('div');
+    box.className = 'check-result';
+    box.textContent = '检查中…';
+    td.append(box);
+    checkRow.append(td);
+    tr.after(checkRow);
+    try {
+      const { internal, external } = await api(`/api/rules/${row.id}/check`, { method: 'POST' });
+      const cls = external.code === 'OK' ? 'ok'
+        : ['NO_HOST', 'EGRESS_BLOCKED'].includes(external.code) ? 'unknown' : 'bad';
+      const internalPart = internal.ok
+        ? '内部检查通过'
+        : `内部检查未通过：${internal.problems.join('；')}`;
+      box.innerHTML =
+        `<span class="check ${internal.ok ? 'ok' : 'bad'}">${escapeHtml(internalPart)}</span>
+         <span class="check ${cls}">${escapeHtml(CHECK_HINTS[external.code] || external.code)}</span>
+         <div><small>${escapeHtml(external.detail || '')}</small></div>`;
+    } catch (err) {
+      box.textContent = err.message;
+    }
+  }
+});
+
+$('#trash-table').addEventListener('click', async (e) => {
+  const btn = e.target.closest('button[data-act="restore"]');
+  if (!btn) return;
+  const id = btn.closest('tr').dataset.id;
+  try {
+    await api(`/api/rules/${id}/restore`, { method: 'POST' });
+    toast('已恢复');
+    loadTrash();
+    loadMeta();
+  } catch (err) {
+    toast(err.message);
+  }
+});
+
+// —— 拖拽导入 ——
+
+const dz = $('#dropzone');
+['dragenter', 'dragover'].forEach((ev) =>
+  dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.add('over'); }));
+['dragleave', 'drop'].forEach((ev) =>
+  dz.addEventListener(ev, (e) => { e.preventDefault(); dz.classList.remove('over'); }));
+
+dz.addEventListener('drop', async (e) => {
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  if (!file.name.endsWith('.txt')) return toast('请拖入 .txt 文件');
+
+  const raw = await file.text();
+  const f = $('#rule-form');
+  f.filename.value = file.name;
+  f.content.value = raw;
+  updateWarnings();
+
+  // <textarea> 按 HTML 规范会把 CRLF/CR 规范化成 LF。所以文件里若含回车符，
+  // 输入框里的内容已经和原文件不是逐字节相同了。微信要求精确匹配，
+  // 这个差异必须说出来，不能悄悄发生。
+  if (f.content.value !== raw) {
+    toast(
+      `注意：${file.name} 含回车符（CR），输入框已自动规范化为 LF，内容将与原文件非逐字节相同；若微信校验失败请优先排查这一点`
+    );
+  }
+
+  toast(`已读取 ${file.name}`);
+});
+
+// —— 接入主流程 ——
+
+listeners.onEnterMain.push(loadMeta, loadRules);
+document.addEventListener('tab:show', (e) => {
+  if (e.detail === 'rules') loadRules();
+  if (e.detail === 'trash') loadTrash();
+});

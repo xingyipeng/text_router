@@ -1,7 +1,7 @@
 const FILENAME_RE = /^[A-Za-z0-9_-]{1,80}\.txt$/;
 
 export const MAX_CONTENT_BYTES = 4096;
-export const MIN_PASSWORD_LENGTH = 12;
+export const MIN_PASSWORD_LENGTH = 8;
 
 export function isValidFilename(name) {
   if (typeof name !== 'string') return false;

@@ -39,6 +39,11 @@ CREATE TABLE IF NOT EXISTS verify_files (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_active_host_filename
   ON verify_files(host, filename) WHERE deleted_at IS NULL;
+
+CREATE TABLE IF NOT EXISTS settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 `;
 
 export function openDb(dbPath) {

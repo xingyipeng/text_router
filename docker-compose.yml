@@ -9,6 +9,7 @@ services:
       - ./data:/app/data
     environment:
       DATA_DIR: /app/data
+      BACKUP_DIR: /app/data/backups
       SESSION_TTL_HOURS: "${SESSION_TTL_HOURS:-168}"
       COOKIE_SECURE: "${COOKIE_SECURE:-false}"
       SUPER_ADMIN_USER: "${SUPER_ADMIN_USER:-}"

@@ -1,6 +1,6 @@
 export const DEFAULT_CAPACITY = 200;
 
-export function createDiagnostics(capacity = DEFAULT_CAPACITY) {
+export function createRequestLog(capacity = DEFAULT_CAPACITY) {
   const items = [];
   return {
     record(entry) {

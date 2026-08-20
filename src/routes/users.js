@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import {
-  createUser, getUser, listUsers, disableUser, restoreUser, setPassword,
+  createUser, getUser, listUsers, disableUser, restoreUser, setPassword, updateUser,
 } from '../repo/users.js';
 import { UniqueViolation } from '../repo/errors.js';
 import { MIN_PASSWORD_LENGTH } from '../validate.js';
@@ -37,6 +37,36 @@ export function createUserRoutes({ db }) {
         createdBy: c.get('user').id,
       });
       return c.json(user, 201);
+    } catch (err) {
+      if (err instanceof UniqueViolation) return c.json({ error: '用户名已存在' }, 409);
+      throw err;
+    }
+  });
+
+  router.put('/:id', async (c) => {
+    const target = getUser(db, Number(c.req.param('id')));
+    if (!target) return c.json({ error: '用户不存在' }, 404);
+
+    let body;
+    try { body = await c.req.json(); } catch { return c.json({ error: 'bad request' }, 400); }
+    const { username, display_name } = body || {};
+    const hasUsername = username !== undefined;
+    const hasDisplayName = display_name !== undefined;
+    if (!hasUsername && !hasDisplayName) {
+      return c.json({ error: '没有需要修改的内容' }, 400);
+    }
+    if (hasUsername && (typeof username !== 'string' || !USERNAME_RE.test(username.trim()))) {
+      return c.json({ error: '用户名只能包含字母、数字、下划线、点、@ 和连字符，长度 1-64' }, 400);
+    }
+    if (hasDisplayName && typeof display_name !== 'string') {
+      return c.json({ error: '显示名必须是字符串' }, 400);
+    }
+
+    try {
+      return c.json(updateUser(db, target.id, {
+        username: hasUsername ? username.trim() : undefined,
+        displayName: hasDisplayName ? display_name.trim() : undefined,
+      }));
     } catch (err) {
       if (err instanceof UniqueViolation) return c.json({ error: '用户名已存在' }, 409);
       throw err;

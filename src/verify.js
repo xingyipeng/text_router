@@ -1,5 +1,5 @@
 import { isValidFilename, normalizeHost } from './validate.js';
-import { matchFile } from './repo/files.js';
+import { matchFile } from './repo/rules.js';
 
 const TEXT_HEADERS = {
   'Content-Type': 'text/plain; charset=utf-8',
@@ -11,14 +11,14 @@ export function resolveHost(c) {
   return normalizeHost(c.req.header('x-forwarded-host') || c.req.header('host') || '');
 }
 
-export function createVerifyHandler({ db, diagnostics }) {
+export function createVerifyHandler({ db, requestLog }) {
   return (c) => {
     const filename = c.req.param('filename');
     const resolvedHost = resolveHost(c);
 
     const row = isValidFilename(filename) ? matchFile(db, resolvedHost, filename) : undefined;
 
-    diagnostics.record({
+    requestLog.record({
       host: c.req.header('host') || '',
       forwardedHost: c.req.header('x-forwarded-host') || '',
       resolvedHost,

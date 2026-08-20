@@ -1,5 +1,5 @@
 import { isValidFilename } from './validate.js';
-import { matchFile } from './repo/files.js';
+import { matchFile } from './repo/rules.js';
 
 export const CHECK_CODES = {
   OK: 'OK',
@@ -27,11 +27,22 @@ export function runInternalCheck(db, file, probeHost) {
   if (typeof file.content !== 'string' || file.content.length === 0) problems.push('内容为空');
 
   const host = probeHost !== undefined ? probeHost : file.host;
-  const matched = matchFile(db, host, file.filename);
-  if (!matched) {
-    problems.push('按当前匹配规则查不到任何记录');
-  } else if (matched.id !== file.id) {
-    problems.push(`当前匹配规则下命中的不是这条记录，而是 id=${matched.id}（更精确的 host 优先）`);
+  if (host === '' && probeHost === undefined) {
+    // 全局记录：任一域名上有同名的精确记录，都会遮蔽它
+    const shadowers = db.prepare(`
+      SELECT id, host FROM verify_files
+      WHERE filename = ? AND host != '' AND deleted_at IS NULL
+    `).all(file.filename);
+    for (const s of shadowers) {
+      problems.push(`在域名 ${s.host} 上命中的不是这条记录，而是 id=${s.id}（更精确的 host 优先）`);
+    }
+  } else {
+    const matched = matchFile(db, host, file.filename);
+    if (!matched) {
+      problems.push('按当前匹配规则查不到任何记录');
+    } else if (matched.id !== file.id) {
+      problems.push(`当前匹配规则下命中的不是这条记录，而是 id=${matched.id}（更精确的 host 优先）`);
+    }
   }
 
   return { ok: problems.length === 0, problems };

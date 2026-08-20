@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openDb } from '../src/db.js';
-import { createFile, getFile, softDeleteFile } from '../src/repo/files.js';
+import { createFile, getFile, softDeleteFile } from '../src/repo/rules.js';
 import { runInternalCheck, runExternalCheck, CHECK_CODES } from '../src/selfcheck.js';
 
 let dir, db;
@@ -47,6 +47,20 @@ describe('runInternalCheck', () => {
     const r = runInternalCheck(db, getFile(db, global.id), 'a.com');
     expect(r.ok).toBe(false);
     expect(r.problems.join()).toContain('命中的不是这条');
+  });
+
+  it('全局记录被遮蔽时（不传 probeHost）也不通过，并指明域名与遮蔽者 id', () => {
+    const global = createFile(db, { host: '', filename: 'x.txt', content: 'g', userId: 1 });
+    const exact = createFile(db, { host: 'a.com', filename: 'x.txt', content: 'e', userId: 1 });
+    const r = runInternalCheck(db, getFile(db, global.id));
+    expect(r.ok).toBe(false);
+    expect(r.problems.join()).toContain('a.com');
+    expect(r.problems.join()).toContain(`id=${exact.id}`);
+  });
+
+  it('全局记录无遮蔽时（不传 probeHost）通过', () => {
+    const global = createFile(db, { host: '', filename: 'x.txt', content: 'g', userId: 1 });
+    expect(runInternalCheck(db, getFile(db, global.id)).ok).toBe(true);
   });
 
   it('记录不存在时不通过', () => {

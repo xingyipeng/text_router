@@ -6,7 +6,7 @@ import { openDb } from '../src/db.js';
 import { createUser, listUsers, findActiveByUsername } from '../src/repo/users.js';
 import { verifyPassword } from '../src/password.js';
 import { ensureSuperAdmin, resetSuperPassword } from '../src/init.js';
-import { createDiagnostics } from '../src/diagnostics.js';
+import { createRequestLog } from '../src/requestLog.js';
 import { createApp } from '../src/app.js';
 
 let dir, db;
@@ -34,12 +34,32 @@ describe('ensureSuperAdmin', () => {
     expect(verifyPassword('password1234', row.password_hash)).toBe(true);
   });
 
-  it('空库且缺少环境变量时抛错', () => {
-    expect(() => ensureSuperAdmin(db, {})).toThrow(/SUPER_ADMIN_USER/);
-    expect(() => ensureSuperAdmin(db, { username: 'root' })).toThrow(/SUPER_ADMIN_PASSWORD/);
+  it('空库且未设置环境变量时用默认账号 admin/admin123 创建超管', () => {
+    const r = ensureSuperAdmin(db, {});
+    expect(r.created).toBe(true);
+    expect(r.username).toBe('admin');
+    expect(r.defaultedUsername).toBe(true);
+    expect(r.defaultedPassword).toBe(true);
+    const row = findActiveByUsername(db, 'admin');
+    expect(row.is_super).toBe(1);
+    expect(verifyPassword('admin123', row.password_hash)).toBe(true);
   });
 
-  it('空库且密码过短时抛错', () => {
+  it('只设置用户名时密码用默认值', () => {
+    const r = ensureSuperAdmin(db, { username: 'root' });
+    expect(r.created).toBe(true);
+    expect(r.defaultedPassword).toBe(true);
+    const row = findActiveByUsername(db, 'root');
+    expect(verifyPassword('admin123', row.password_hash)).toBe(true);
+  });
+
+  it('显式设置全部变量时不走默认值', () => {
+    const r = ensureSuperAdmin(db, { username: 'root', password: 'password1234' });
+    expect(r.defaultedUsername).toBe(false);
+    expect(r.defaultedPassword).toBe(false);
+  });
+
+  it('空库且显式设置的密码过短时抛错', () => {
     expect(() => ensureSuperAdmin(db, { username: 'root', password: 'short' }))
       .toThrow(/至少/);
   });
@@ -96,20 +116,20 @@ describe('resetSuperPassword', () => {
   });
 });
 
-describe('GET /api/diagnostics/recent-requests', () => {
+describe('GET /api/request-log', () => {
   it('未登录返回 401', async () => {
     const app = createApp({
-      db, diagnostics: createDiagnostics(),
+      db, requestLog: createRequestLog(),
       config: { sessionTtlHours: 24, cookieSecure: false },
     });
-    expect((await app.request('/api/diagnostics/recent-requests',
+    expect((await app.request('/api/request-log',
       { headers: { host: 'admin.local' } })).status).toBe(401);
   });
 
   it('登录后返回最近请求，最新在前', async () => {
-    const diagnostics = createDiagnostics();
+    const requestLog = createRequestLog();
     const app = createApp({
-      db, diagnostics,
+      db, requestLog,
       config: { sessionTtlHours: 24, cookieSecure: false },
     });
     createUser(db, { username: 'alice', password: 'password1234' });
@@ -123,7 +143,7 @@ describe('GET /api/diagnostics/recent-requests', () => {
     await app.request('/first.txt', { headers: { host: 'a.com' } });
     await app.request('/second.txt', { headers: { host: 'a.com' } });
 
-    const res = await app.request('/api/diagnostics/recent-requests',
+    const res = await app.request('/api/request-log',
       { headers: { host: 'admin.local', cookie } });
     const rows = await res.json();
     expect(rows[0].filename).toBe('second.txt');

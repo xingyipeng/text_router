@@ -2,23 +2,27 @@ import { countUsers, createUser } from './repo/users.js';
 import { MIN_PASSWORD_LENGTH } from './validate.js';
 import { hashPassword } from './password.js';
 
+export const DEFAULT_SUPER_USER = 'admin';
+export const DEFAULT_SUPER_PASSWORD = 'admin123';
+
 export function ensureSuperAdmin(db, { username, password } = {}) {
   if (countUsers(db) > 0) return { created: false };
 
-  if (!username) {
-    throw new Error('数据库为空但未设置 SUPER_ADMIN_USER，拒绝以无人可登录的状态启动');
-  }
-  if (!password) {
-    throw new Error('数据库为空但未设置 SUPER_ADMIN_PASSWORD，拒绝以无人可登录的状态启动');
-  }
-  if (password.length < MIN_PASSWORD_LENGTH) {
+  const defaultedUsername = !username;
+  const defaultedPassword = !password;
+  const finalUsername = username || DEFAULT_SUPER_USER;
+  const finalPassword = password || DEFAULT_SUPER_PASSWORD;
+
+  // 默认密码 admin123 恰好满足 8 位下限；显式设置的密码同样受此约束
+  if (finalPassword.length < MIN_PASSWORD_LENGTH) {
     throw new Error(`SUPER_ADMIN_PASSWORD 至少需要 ${MIN_PASSWORD_LENGTH} 个字符`);
   }
 
   createUser(db, {
-    username, password, displayName: username, isSuper: true, createdBy: null,
+    username: finalUsername, password: finalPassword,
+    displayName: finalUsername, isSuper: true, createdBy: null,
   });
-  return { created: true };
+  return { created: true, username: finalUsername, defaultedUsername, defaultedPassword };
 }
 
 export function resetSuperPassword(db, newPassword) {

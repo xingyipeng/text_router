@@ -1,8 +1,11 @@
 node_modules/
 data/
 .omc/
+.playwright-mcp/
+.idea/
 *.db
 *.db-wal
 *.db-shm
 .DS_Store
 .env
+.claude/settings.local.json
