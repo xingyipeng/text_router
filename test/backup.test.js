@@ -158,8 +158,8 @@ describe('备份设置', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  it('默认值：关闭 / 03:17 / 保留 14', () => {
-    expect(getBackupSettings(db)).toEqual({ enabled: false, time: '03:17', keep: 14 });
+  it('默认值：关闭 / 23:00 / 保留 7', () => {
+    expect(getBackupSettings(db)).toEqual({ enabled: false, time: '23:00', keep: 7 });
   });
 
   it('非法输入抛中文错误', () => {
@@ -293,7 +293,7 @@ describe('备份路由', () => {
     it('GET 返回默认值，且不被 /:name 路由吞掉', async () => {
       const res = await as(superCookie)('/api/backups/settings');
       expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({ enabled: false, time: '03:17', keep: 14 });
+      expect(await res.json()).toEqual({ enabled: false, time: '23:00', keep: 7 });
     });
 
     it('PUT 保存后 GET 可回读', async () => {

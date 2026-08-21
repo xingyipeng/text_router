@@ -79,7 +79,7 @@ describe('GET /api/settings', () => {
     const res = await as(superCookie)('/api/settings');
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({
-      backup: { enabled: false, time: '03:17', keep: 14 },
+      backup: { enabled: false, time: '23:00', keep: 7 },
       session: { ttl_hours: 24, single_session: false },
       selfcheck: { timeout_seconds: 8 },
       requestlog: { capacity: 200 },
@@ -95,7 +95,7 @@ describe('PUT /api/settings', () => {
     expect(res.status).toBe(200);
     const saved = await res.json();
     expect(saved.session).toEqual({ ttl_hours: 720, single_session: true });
-    expect(saved.backup).toEqual({ enabled: false, time: '03:17', keep: 14 });
+    expect(saved.backup).toEqual({ enabled: false, time: '23:00', keep: 7 });
     expect(saved.selfcheck).toEqual({ timeout_seconds: 8 });
     expect(saved.requestlog).toEqual({ capacity: 200 });
 

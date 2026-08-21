@@ -90,7 +90,7 @@ export function deleteBackup(dir, name) {
 
 // —— 定时备份设置（存 settings 表）——
 
-const DEFAULT_SETTINGS = { enabled: false, time: '03:17', keep: 14 };
+const DEFAULT_SETTINGS = { enabled: false, time: '23:00', keep: 7 };
 
 export function getBackupSettings(db) {
   const rows = db.prepare(`SELECT key, value FROM settings WHERE key LIKE 'backup_%'`).all();
