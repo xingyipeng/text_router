@@ -7,6 +7,9 @@ PLATFORMS="linux/amd64,linux/arm64"
 TAGS=() # 可重复 -t 指定多个标签，如 -t ...:1.0.0 -t ...:latest
 MODE="build" # build：只构建验证（结果进构建缓存）；push：推送到仓库；load：载入本地 Docker
 NO_CACHE=""
+# 部分仓库（如阿里云个人版）不认识 buildx 默认附加的 OCI attestation 清单，
+# 报 unknown manifest class；关闭 provenance 保证兼容
+PROVENANCE="--provenance=false"
 
 usage() {
   cat <<'EOF'
@@ -69,9 +72,9 @@ BUILDER="--builder $BUILDER_NAME"
 cd "$(dirname "$0")/.." # 统一在仓库根目录执行，构建上下文是仓库根
 
 case "$MODE" in
-  push)  docker buildx build $BUILDER --platform "$PLATFORMS" $NO_CACHE "${TAG_ARGS[@]}" --push . ;;
-  load)  docker buildx build $BUILDER --platform "$PLATFORMS" $NO_CACHE "${TAG_ARGS[@]}" --load . ;;
-  build) docker buildx build $BUILDER --platform "$PLATFORMS" $NO_CACHE "${TAG_ARGS[@]}" . ;;
+  push)  docker buildx build $BUILDER --platform "$PLATFORMS" $NO_CACHE $PROVENANCE "${TAG_ARGS[@]}" --push . ;;
+  load)  docker buildx build $BUILDER --platform "$PLATFORMS" $NO_CACHE $PROVENANCE "${TAG_ARGS[@]}" --load . ;;
+  build) docker buildx build $BUILDER --platform "$PLATFORMS" $NO_CACHE $PROVENANCE "${TAG_ARGS[@]}" . ;;
 esac
 
 echo "完成：${TAGS[*]}（${PLATFORMS}）"
