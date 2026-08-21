@@ -3,6 +3,7 @@ data
 .git
 .gitignore
 docs/superpowers
+docs/screenshots
 test
 vitest.config.js
 *.md
