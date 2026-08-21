@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 跨平台构建 wx_router Docker 镜像（默认 linux/amd64 + linux/arm64）
-# 用法见 README「Docker 跨平台构建」，或 scripts/build-docker.sh --help
+# 用法见 README「Docker 部署与打包」，或 scripts/build-docker.sh --help
 set -euo pipefail
 
 PLATFORMS="linux/amd64,linux/arm64"

@@ -21,23 +21,47 @@ npm install
 SUPER_ADMIN_USER=admin SUPER_ADMIN_PASSWORD=your-password npm start
 ```
 
-## Docker 跨平台构建
+## Docker 部署与打包
 
-在 x86 机器上构建的镜像拿到 arm 机器上跑会失败（反之亦然）：`better-sqlite3` 是原生模块，与构建机架构绑死。用仓库里的构建脚本一次产出 `linux/amd64` + `linux/arm64` 双架构镜像：
+部署用 `docker compose`，打包发布用仓库里的构建脚本。
+
+### 部署
+
+「快速开始」里的 `docker compose up -d` 就是完整部署。compose 文件要点：
+
+- **数据持久化**：宿主机 `./data` 挂载为容器内 `/app/data`——数据库、备份全在里面，升级镜像、删除容器都不丢数据
+- **自动重启**：`restart: unless-stopped`，进程退出后 Docker 自动拉起（界面「恢复」功能依赖这一点）
+- **环境变量**：从 `.env` 读取传给容器（`SUPER_ADMIN_*`、`PORT`、`SESSION_TTL_HOURS`、`COOKIE_SECURE`）；`DATA_DIR` / `BACKUP_DIR` 已由 compose 固定为容器内路径，无需额外设置
+
+### 跨平台打包
+
+在 x86 机器上构建的镜像拿到 arm 机器上跑会失败（反之亦然）：`better-sqlite3` 是原生模块，与构建机架构绑死。用构建脚本一次产出 `linux/amd64` + `linux/arm64` 双架构镜像并推送：
 
 ```bash
 # 前提：Docker 19.03+ 自带 buildx。Linux 主机首次跨架构构建前注册一次 QEMU 模拟器：
 #   docker run --rm --privileged tonistiigi/binfmt --install all
 # Docker Desktop（macOS/Windows）已内置，无需这步。
 
-scripts/build-docker.sh --push -t registry.example.com/wx-router:1.0.0
+scripts/build-docker.sh --push \
+  -t registry.example.com/wx-router:1.0.0 \
+  -t registry.example.com/wx-router:latest
 ```
 
-服务器上 `docker pull` 后，把 compose 里的 `build: .` 换成 `image: registry.example.com/wx-router:1.0.0` 即可。脚本选项：`-t/--tag` 镜像名、`--platform` 目标平台（默认双架构）、`--push` 推送、`--load` 只构建本机架构载入本地（试跑用）、`--no-cache`。不加 `--push/--load` 则只做双架构构建验证。
+服务器上把 compose 里的 `build: .` 换成 `image: registry.example.com/wx-router:1.0.0`，之后升级版本：
 
-Dockerfile 无需改动：依赖编译发生在镜像构建内部（`npm ci` 在目标平台的容器里执行），宿主机上的 `node_modules` 从不进入镜像。
+```bash
+docker compose pull && docker compose up -d   # ./data 数据卷原样沿用，业务数据不受影响
+```
 
-**没有镜像仓库的内网**：按服务器架构单独导出 tar 包，拷过去 `docker load`：
+脚本选项：`-t/--tag` 镜像名（**可重复**，一次构建打多个标签，如上例的版本号 + latest）、`--platform` 目标平台（默认双架构）、`--push` 推送、`--load` 只构建本机架构载入本地（试跑用）、`--no-cache`。不加 `--push/--load` 则只做双架构构建验证。
+
+多平台构建需要**容器驱动**的 buildx 构建器（Docker Desktop 默认的 docker 驱动不支持）。脚本会优先复用机器上已有的容器驱动构建器——多个项目共用一个即可；一个都没有时才创建一个通用的 `multiarch`。
+
+Dockerfile 无需改动：两阶段构建——第一阶段在 `node:22-slim` 里装 python3/make/g++ 编译 `better-sqlite3`，第二阶段只拷贝编译产物和代码，最终镜像不带编译工具链。依赖编译发生在目标平台的容器内部，宿主机上的 `node_modules` 从不进入镜像。
+
+### 没有镜像仓库的内网
+
+按服务器架构单独导出 tar 包，拷过去 `docker load`：
 
 ```bash
 # 服务器是 x86_64（arm64 就把平台换成 linux/arm64）：
@@ -61,6 +85,7 @@ docker load -i wx-router-amd64.tar
 |---|---|---|
 | `PORT` | `3000` | 监听端口 |
 | `DATA_DIR` | `./data` | SQLite 文件目录 |
+| `BACKUP_DIR` | `./backups` | 备份文件目录（compose 已改为 `/app/data/backups`，随数据卷持久化） |
 | `SUPER_ADMIN_USER` | `admin` | 仅在数据库为空时用于创建超管 |
 | `SUPER_ADMIN_PASSWORD` | `admin123` | 同上；至少 8 位 |
 | `SESSION_TTL_HOURS` | `168` | 会话有效期（7 天） |
@@ -69,6 +94,8 @@ docker load -i wx-router-amd64.tar
 数据库非空时 `SUPER_ADMIN_*` 会被忽略，重启不会重置任何账号。数据库为空且未设置时，会用默认账号 `admin/admin123` 自动创建超管，并在启动日志打印警告——**默认密码是弱口令，首次登录后请立即修改**。密码至少 8 位。
 
 ## 使用要点
+
+**看板**：登录后的首页是「看板」，汇总文件统计（总数、绑定域名数、按域名分布）和请求统计（命中率、今日命中/未命中、最近 24 小时趋势）。文件统计来自数据库；请求统计来自内存，服务重启后清零。
 
 **添加校验文件**：从微信后台下载 `.txt` 文件后，直接**拖到新增对话框的虚线框里**，文件名和内容会自动填入，避免手抄出错。
 
@@ -97,6 +124,8 @@ docker load -i wx-router-amd64.tar
 
 删除用户是**软禁用**：账号立即无法登录、既有会话立即失效，但他创建过的记录归属信息完整保留。禁用后可以随时恢复。
 
+超管还可以编辑任意用户的**显示名和用户名**（重名会返回 409）。改名不影响已登录的会话。
+
 修改密码（无论自己改还是超管重置）都会清除该用户的**所有**会话。自己改密码时会当场补发一个新会话，所以不会掉线，但其他设备上的登录会失效。
 
 ## 备份
@@ -122,7 +151,7 @@ node scripts/backup.js --dir ./backups --keep 14
 docker compose exec -T wx_router node scripts/backup.js --dir /app/data/backups --keep 30
 ```
 
-参数也可用环境变量 `BACKUP_DIR` / `KEEP` / `DATA_DIR` 代替。脚本只读打开源库，不写运行中的库。配合 crontab 的定时示例：
+参数也可用环境变量 `BACKUP_DIR` / `KEEP` / `DATA_DIR` 代替（`KEEP` 只对 CLI 脚本生效；界面定时备份的保留份数在「备份」页设置）。脚本只读打开源库，不写运行中的库。配合 crontab 的定时示例：
 
 ```cron
 17 3 * * * cd /opt/wx_router && docker compose exec -T wx_router node scripts/backup.js --dir /app/data/backups --keep 30 >> /var/log/wx_router-backup.log 2>&1
@@ -191,11 +220,11 @@ npm rebuild better-sqlite3
 
 **Docker 不受影响** —— 镜像里的 `npm ci` 是在 `node:22-slim` 内执行的，天然对准生产的 Node 版本。
 
-测试已在 **Node 22.21.1**（与 Dockerfile 同大版本）和 **Node 23.10.0** 上分别跑通，178 项全过。
+测试已在 **Node 22.21.1**（与 Dockerfile 同大版本）上全量跑通：16 个测试文件、**268 项全过**。
 
 前端是原生 HTML/JS，无构建步骤，改完刷新即可。
 
-**前端没有自动化测试覆盖**，改动后需要手动验证：登录、增删改查、拖拽导入、自检、回收站恢复、用户管理、请求记录面板。后端有完整测试，可以放心重构。
+**前端没有自动化测试覆盖**，改动后需要手动验证：登录、看板、增删改查、拖拽导入、自检、回收站恢复、用户管理、请求记录、备份与恢复。后端有完整测试，可以放心重构。
 
 ## 架构
 
@@ -206,11 +235,15 @@ src/
 ├── db.js            SQLite 连接与表结构
 ├── repo/            仓储层，只认识数据库，不认识 HTTP
 ├── verify.js        GET /{name}.txt 的匹配与响应
+├── requestlog.js    .txt 请求的内存记录（排障、看板共用）
+├── stats.js         看板统计聚合
+├── backup.js        备份核心：在线备份、定时调度、恢复（界面与 CLI 共用）
 ├── selfcheck.js     两层自检与错误分类
 ├── auth.js          会话中间件与权限守卫
 ├── routes/          HTTP 接口层
 ├── app.js           装配路由，返回 Hono 实例（测试直接用它）
-└── server.js        读环境变量、开库、初始化超管、监听端口
+├── init.js          超管初始化与密码重置（server 与救援脚本共用）
+└── server.js        读环境变量、开库、监听端口
 ```
 
 `app.js` 与 `server.js` 分开是刻意的：测试拿到装配好的 Hono 实例就能发请求，不必监听端口、不必读环境变量。
