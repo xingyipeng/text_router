@@ -79,89 +79,7 @@ docker load -i wx-router-amd64.tar
 
 第 2 点做不到也能用：把记录的"域名"字段留空，它就对所有域名生效。登录后进「请求记录」面板可以直接看到本服务实际收到的 Host 是什么，据此决定用哪种模式。
 
-### 接入示例
-
-本服务**只响应根路径的 `.txt`**（`/MP_verify_xxx.txt` 这类），子目录形如 `/h5/xxx.txt` 不会命中——微信校验本身也要求文件位于域名根路径。网关的匹配规则照此写即可。
-
-#### Nginx
-
-```nginx
-server {
-    listen 443 ssl;
-    server_name example.com;
-
-    # 根路径的 .txt 转发给 wx_router。
-    # 注意 proxy_pass 结尾不带 / —— 带了 / 会把路径重写掉，微信校验就失败了
-    location ~* ^/[^/]+\.txt$ {
-        proxy_pass http://127.0.0.1:3000;          # wx_router 在别的机器上就换成内网地址
-        proxy_set_header Host $host;               # nginx 默认就传 Host，显式写出更稳
-        proxy_set_header X-Forwarded-Host $host;   # 服务优先读这个头，双保险
-    }
-
-    location / {
-        # 其余业务流量照常处理
-    }
-}
-```
-
-要点：
-
-- 正则 location 优先级高于普通前缀 location，不会抢走其他业务流量
-- 站内根路径本来就有 `.txt`（如 `robots.txt`）时用精确匹配排除——精确匹配优先级最高，不受书写顺序影响：`location = /robots.txt { ... }`
-- 站点有 HTTP→HTTPS 强制跳转时，`return 301` 必须放在 `location /` 里而不是 server 级，否则 `.txt` 也会被跳转（微信不允许重定向）：
-
-```nginx
-server {
-    listen 80;
-    server_name example.com;
-
-    location ~* ^/[^/]+\.txt$ {
-        proxy_pass http://127.0.0.1:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Forwarded-Host $host;
-    }
-
-    location / {
-        return 301 https://$host$request_uri;
-    }
-}
-```
-
-#### Traefik
-
-Docker 标签方式（wx_router 与 Traefik 同一 compose 网络）：
-
-```yaml
-labels:
-  - "traefik.enable=true"
-  # 不指定 entrypoints 即监听全部入口（web + websecure），HTTP/HTTPS 都能验证
-  - "traefik.http.routers.wxverify.rule=Host(`example.com`) && PathRegexp(`^/[^/]+\\.txt$`)"
-  - "traefik.http.services.wxverify.loadbalancer.server.port=3000"
-```
-
-静态配置 / file provider 的等价写法：
-
-```yaml
-http:
-  routers:
-    wxverify:
-      rule: "Host(`example.com`) && PathRegexp(`^/[^/]+\\.txt$`)"
-      service: wxrouter
-  services:
-    wxrouter:
-      loadBalancer:
-        servers:
-          - url: "http://127.0.0.1:3000"
-```
-
-要点：
-
-- Traefik 转发时自动带上 `X-Forwarded-Host`，无需额外 middleware
-- 不要加 stripPrefix 之类改写路径的 middleware
-- `PathRegexp` 规则比单纯的 `Host(...)` 更具体，Traefik 按规则长度自动选优：不会抢其他业务流量；web 入口上只带 Host 的 HTTP→HTTPS 跳转路由也会自动让位给 `.txt` 路由
-- 站内已有根路径 `.txt` 时用否定规则排除：`Host(`example.com`) && PathRegexp(`^/[^/]+\\.txt$`) && !Path(`/robots.txt`)`
-
-接入后到「请求记录」面板确认：能看到 `.txt` 请求、且「解析后」域名正确，即链路已通。
+**完整配置示例（Nginx / Traefik）见 [docs/gateway.md](docs/gateway.md)**。管理端登录后点顶栏「帮助」也能直接查看——`docs/` 目录里的每篇 md 都会自动出现在帮助面板里，增加文档只需放文件。
 
 ## 环境变量
 
@@ -174,6 +92,7 @@ http:
 | `SUPER_ADMIN_PASSWORD` | `admin123` | 同上；至少 8 位 |
 | `SESSION_TTL_HOURS` | `168` | 会话有效期（7 天），可在界面「设置」中覆盖（只影响新会话） |
 | `COOKIE_SECURE` | `false` | 部署在 HTTPS 后面时设为 `true` |
+| `DOCS_DIR` | `./docs` | 帮助面板的 markdown 文档目录 |
 
 数据库非空时 `SUPER_ADMIN_*` 会被忽略，重启不会重置任何账号。数据库为空且未设置时，会用默认账号 `admin/admin123` 自动创建超管，并在启动日志打印警告——**默认密码是弱口令，首次登录后请立即修改**。密码至少 8 位。
 
@@ -182,6 +101,8 @@ http:
 **看板**：登录后的首页是「看板」，汇总文件统计（总数、绑定域名数、按域名分布）和请求统计（命中率、今日命中/未命中、最近 24 小时趋势）。文件统计来自数据库；请求统计来自内存，服务重启后清零。
 
 **添加校验文件**：从微信后台下载 `.txt` 文件后，直接**拖到新增对话框的虚线框里**，文件名和内容会自动填入，避免手抄出错。
+
+**帮助**：顶栏「帮助」按钮打开帮助面板，列出 `docs/` 目录里的所有 md 文档（标题取自文件首行 `#`），左侧选择、右侧渲染，新增文档只需放文件即可，服务无需重启。
 
 **批量迁移**：规则页「导出」把全部未删除规则打成 JSON 下载；「导入」上传该 JSON，按「域名 + 文件名」与现有规则合并，重复记录可选**跳过或覆盖**（默认跳过），完成后报告导入 / 跳过 / 错误明细。
 
@@ -319,7 +240,7 @@ npm rebuild better-sqlite3
 
 测试已在 **Node 22.21.1**（与 Dockerfile 同大版本）上全量跑通：17 个测试文件、**298 项全过**。
 
-前端是原生 HTML/JS，无构建步骤，改完刷新即可。
+前端是原生 HTML/JS，无构建步骤，改完刷新即可。唯一的第三方前端文件是 `public/vendor/marked.min.js`（帮助面板的 markdown 渲染，v15.0.12，MIT，由自己服务器提供、不走 CDN）；升级时重新下载同名文件覆盖即可。
 
 **前端没有自动化测试覆盖**，改动后需要手动验证：登录、看板、增删改查、拖拽导入、自检、回收站恢复、用户管理、请求记录、备份与恢复。后端有完整测试，可以放心重构。
 

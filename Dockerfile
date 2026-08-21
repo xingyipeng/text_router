@@ -12,6 +12,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY package.json ./
 COPY src ./src
 COPY public ./public
+COPY docs ./docs
 COPY scripts ./scripts
 RUN mkdir -p /app/data && chown -R node:node /app
 ENV NODE_ENV=production PORT=3000 DATA_DIR=/app/data

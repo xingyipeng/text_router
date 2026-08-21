@@ -7,5 +7,6 @@ import './admin.js';
 import './backup.js';
 import './settings.js';
 import './dashboard.js';
+import './help.js';
 
 boot();

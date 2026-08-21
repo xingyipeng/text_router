@@ -15,6 +15,7 @@ const config = {
   sessionTtlHours: Number(process.env.SESSION_TTL_HOURS || 168),
   cookieSecure: process.env.COOKIE_SECURE === 'true',
   staticRoot: './public',
+  docsDir: process.env.DOCS_DIR || './docs',
   // 恢复后重启进程：Docker restart 策略（或 pm2/systemd）会重新拉起
   restartImpl: () => setTimeout(() => process.exit(0), 200),
 };

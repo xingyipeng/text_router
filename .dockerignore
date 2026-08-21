@@ -2,9 +2,10 @@ node_modules
 data
 .git
 .gitignore
-docs
+docs/superpowers
 test
 vitest.config.js
 *.md
+!docs/*.md
 .env
 .omc

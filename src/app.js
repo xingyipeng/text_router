@@ -9,6 +9,7 @@ import { createRequestLogRoutes } from './routes/requestlog.js';
 import { createStatsRoutes } from './routes/stats.js';
 import { createBackupRoutes } from './routes/backup.js';
 import { createSettingsRoutes } from './routes/settings.js';
+import { createDocsRoutes } from './routes/docs.js';
 
 export function createApp({ db, requestLog, config }) {
   const app = new Hono();
@@ -24,6 +25,7 @@ export function createApp({ db, requestLog, config }) {
   app.route('/api/stats', createStatsRoutes({ db, requestLog }));
   app.route('/api/backups', createBackupRoutes({ db, config }));
   app.route('/api/settings', createSettingsRoutes({ db, requestLog, config }));
+  app.route('/api/docs', createDocsRoutes({ docsDir: config.docsDir }));
 
   if (config.staticRoot) {
     // 静态文件体积都很小，要求浏览器每次重新校验，改版后无需手动强刷

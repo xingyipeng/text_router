@@ -643,6 +643,118 @@ dialog menu .btn { min-width: 72px; }
 @keyframes toastIn { from { opacity: 0; translate: -50% 12px; } }
 
 /* ============================================================
+   帮助面板：左文档列表 + 右 markdown 渲染
+   ============================================================ */
+#panel-help .help-layout {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.help-side {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-sm);
+  padding: 8px;
+  position: sticky;
+  top: 12px;
+}
+#help-list { display: flex; flex-direction: column; gap: 2px; }
+.help-item {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--text-2);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+.help-item:hover { background: var(--primary-wash); color: var(--primary); }
+.help-item.active { background: var(--primary-weak); color: var(--primary); font-weight: 600; }
+.help-note { margin: 6px 10px; font-size: 12px; color: var(--text-2); }
+.help-note.error { color: var(--bad); }
+
+.markdown-body {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: var(--shadow-sm);
+  padding: 24px 28px;
+  min-width: 0;
+  overflow-wrap: break-word;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--text);
+}
+.markdown-body > :first-child { margin-top: 0; }
+.markdown-body h1 {
+  font-size: 22px;
+  margin: 0 0 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+.markdown-body h2 { font-size: 17px; margin: 26px 0 10px; }
+.markdown-body h3 { font-size: 15px; margin: 20px 0 8px; }
+.markdown-body h4 { font-size: 14px; margin: 16px 0 6px; }
+.markdown-body p { margin: 0 0 10px; }
+.markdown-body ul, .markdown-body ol { margin: 0 0 10px; padding-left: 22px; }
+.markdown-body li { margin: 4px 0; }
+.markdown-body li > ul, .markdown-body li > ol { margin: 4px 0; }
+.markdown-body a { color: var(--primary); text-decoration: none; }
+.markdown-body a:hover { text-decoration: underline; }
+.markdown-body code {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  padding: 1px 5px;
+}
+.markdown-body pre {
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: var(--r-sm);
+  padding: 12px 14px;
+  overflow-x: auto;
+  margin: 0 0 12px;
+}
+.markdown-body pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.markdown-body blockquote {
+  margin: 0 0 10px;
+  padding: 2px 14px;
+  border-left: 3px solid var(--primary);
+  background: var(--primary-wash);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  color: var(--text-2);
+}
+.markdown-body blockquote p { margin: 6px 0; }
+.markdown-body hr { border: 0; border-top: 1px solid var(--border); margin: 18px 0; }
+.markdown-body table {
+  border-collapse: collapse;
+  margin: 0 0 12px;
+  font-size: 13px;
+  width: 100%;
+}
+.markdown-body th, .markdown-body td {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+}
+.markdown-body th { background: var(--bg); font-weight: 600; white-space: nowrap; }
+.markdown-body img { max-width: 100%; }
+
+/* ============================================================
    响应式
    ============================================================ */
 @media (max-width: 1280px) {
@@ -661,6 +773,9 @@ dialog menu .btn { min-width: 72px; }
 @media (max-width: 720px) {
   .search-box input, .search-box input:focus { width: 160px; }
   .toolbar .hint { display: none; }
+  #panel-help .help-layout { grid-template-columns: 1fr; }
+  .help-side { position: static; }
+  .markdown-body { padding: 16px 18px; }
 }
 
 /* ============================================================

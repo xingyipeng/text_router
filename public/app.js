@@ -134,7 +134,7 @@ export function showMain() {
 const TABS = {
   dashboard: '#panel-dashboard', rules: '#panel-rules', trash: '#panel-trash',
   users: '#panel-users', backups: '#panel-backups', settings: '#panel-settings',
-  requests: '#panel-requests',
+  requests: '#panel-requests', help: '#panel-help',
 };
 
 let activeTab = null;
@@ -188,6 +188,8 @@ $('#login-form').addEventListener('submit', async (e) => {
     submitBtn.classList.remove('loading');
   }
 });
+
+$('#btn-help').addEventListener('click', () => switchTab('help'));
 
 $('#btn-logout').addEventListener('click', async () => {
   await api('/api/auth/logout', { method: 'POST' }).catch(() => {});

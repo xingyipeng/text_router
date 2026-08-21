@@ -100,6 +100,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
         <span>请求记录</span>
       </button>
+      <button class="tab" data-tab="help" title="帮助">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg>
+        <span>帮助</span>
+      </button>
     </nav>
 
     <button id="btn-collapse" class="side-collapse" title="收起菜单" aria-label="收起菜单">
@@ -113,6 +117,7 @@
     <header class="topbar">
       <h1 id="page-title">看板</h1>
       <div class="top-user">
+        <button id="btn-help" class="btn sm">帮助</button>
         <span class="avatar" id="me-avatar" aria-hidden="true"></span>
         <span id="me-name" class="top-name"></span>
         <svg class="top-caret" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
@@ -362,6 +367,15 @@
           <span class="empty-sub">当微信后台校验时，请求会实时出现在这里</span>
         </p>
       </div>
+
+      <div id="panel-help" class="panel" hidden>
+        <div class="help-layout">
+          <aside class="help-side">
+            <nav id="help-list" aria-label="帮助文档列表"></nav>
+          </aside>
+          <article id="help-content" class="markdown-body"></article>
+        </div>
+      </div>
     </main>
   </div>
 </div>
@@ -479,6 +493,7 @@
 
 <div id="toast" hidden role="status" aria-live="polite"></div>
 
+<script src="/vendor/marked.min.js"></script>
 <script type="module" src="/main.js"></script>
 </body>
 </html>
