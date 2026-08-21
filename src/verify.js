@@ -13,7 +13,7 @@ export function resolveHost(c) {
 
 export function createVerifyHandler({ db, requestLog }) {
   return (c) => {
-    const filename = c.req.param('filename');
+    const filename = c.req.path.slice(1); // 去掉前导 /，子目录路径形如 h5/xxx.txt
     const resolvedHost = resolveHost(c);
 
     const row = isValidFilename(filename) ? matchFile(db, resolvedHost, filename) : undefined;

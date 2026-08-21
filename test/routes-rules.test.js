@@ -69,10 +69,23 @@ describe('POST /api/rules', () => {
   });
 
   it('非法文件名返回 400', async () => {
-    for (const filename of ['../x.txt', 'a/b.txt', 'x.php', '', 'x.txt.php']) {
+    for (const filename of ['../x.txt', 'x.php', '', 'x.txt.php', '/x.txt', 'a//b.txt']) {
       const res = await api('/api/rules', 'POST', { host: 'a.com', filename, content: 'v' });
       expect(res.status, filename).toBe(400);
     }
+  });
+
+  it('子目录路径合法，创建成功', async () => {
+    const res = await api('/api/rules', 'POST',
+      { host: 'a.com', filename: 'h5/MP_verify_1.txt', content: 'v' });
+    expect(res.status).toBe(201);
+    expect((await res.json()).filename).toBe('h5/MP_verify_1.txt');
+  });
+
+  it('总长超过 255 返回 400', async () => {
+    const long = ['a'.repeat(80), 'b'.repeat(80), 'c'.repeat(80), 'd'.repeat(80)].join('/') + '.txt';
+    const res = await api('/api/rules', 'POST', { host: 'a.com', filename: long, content: 'v' });
+    expect(res.status).toBe(400);
   });
 
   it('文件名长度边界：80 字符通过，81 字符 400', async () => {
@@ -426,7 +439,7 @@ describe('POST /api/rules/import', () => {
     expect(body.skipped).toBe(0);
     expect(body.errors).toHaveLength(2);
     expect(body.errors[0]).toMatchObject({
-      host: 'a.com', filename: 'bad.php', reason: expect.stringContaining('文件名'),
+      host: 'a.com', filename: 'bad.php', reason: expect.stringContaining('路径'),
     });
     expect(body.errors[1].reason).toContain('内容');
 

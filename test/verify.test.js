@@ -83,8 +83,35 @@ describe('GET /{name}.txt', () => {
     expect((await get('/x.txt')).status).toBe(404);
   });
 
-  it('多段路径不被当作校验文件', async () => {
+  it('子目录路径无记录时 404', async () => {
     expect((await get('/sub/x.txt')).status).toBe(404);
+  });
+
+  it('子目录路径命中', async () => {
+    createFile(db, { host: 'a.com', filename: 'sub/x.txt', content: 'sub', userId: 1 });
+    expect(await (await get('/sub/x.txt')).text()).toBe('sub');
+  });
+
+  it('深层子目录路径命中', async () => {
+    createFile(db, { host: 'a.com', filename: 'a/b/c/x.txt', content: 'deep', userId: 1 });
+    expect(await (await get('/a/b/c/x.txt')).text()).toBe('deep');
+  });
+
+  it('子目录路径跨域名隔离', async () => {
+    createFile(db, { host: 'a.com', filename: 'sub/x.txt', content: 'v', userId: 1 });
+    expect((await get('/sub/x.txt', 'b.com')).status).toBe(404);
+  });
+
+  it('全局记录命中子目录路径', async () => {
+    createFile(db, { host: '', filename: 'h5/g.txt', content: 'global', userId: 1 });
+    expect(await (await get('/h5/g.txt', 'whatever.com')).text()).toBe('global');
+  });
+
+  it('根路径与子目录同名记录互不影响', async () => {
+    createFile(db, { host: 'a.com', filename: 'x.txt', content: 'root', userId: 1 });
+    createFile(db, { host: 'a.com', filename: 'sub/x.txt', content: 'sub', userId: 1 });
+    expect(await (await get('/x.txt')).text()).toBe('root');
+    expect(await (await get('/sub/x.txt')).text()).toBe('sub');
   });
 
   it('路径穿越不命中', async () => {

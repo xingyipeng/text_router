@@ -14,7 +14,7 @@ import { getSettings } from '../settings.js';
 function parsePayload(body) {
   const filename = body?.filename;
   if (!isValidFilename(filename)) {
-    return { error: '文件名必须是 1-80 位字母、数字、下划线或连字符，并以 .txt 结尾' };
+    return { error: '路径必须以 .txt 结尾；每段 1-80 位字母、数字、下划线、连字符或点，不能是 . 或 ..，不能含首尾斜杠，总长不超过 255' };
   }
   const content = body?.content;
   if (typeof content !== 'string') return { error: '内容必须是字符串' };

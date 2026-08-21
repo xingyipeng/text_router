@@ -229,7 +229,7 @@
           <table id="rules-table">
             <thead><tr>
               <th class="sortable" data-sort="host" title="点击切换排序">域名</th>
-              <th class="sortable" data-sort="filename" title="点击切换排序">文件名</th>
+              <th class="sortable" data-sort="filename" title="点击切换排序">路径</th>
               <th>备注</th>
               <th class="sortable" data-sort="created_by" title="点击切换排序">创建人</th>
               <th class="sortable" data-sort="updated" title="点击切换排序">最后修改</th>
@@ -248,7 +248,7 @@
         <div class="table-card">
           <table id="trash-table">
             <thead><tr>
-              <th>域名</th><th>文件名</th><th>备注</th><th>删除人</th><th>删除时间</th><th>操作</th>
+              <th>域名</th><th>路径</th><th>备注</th><th>删除人</th><th>删除时间</th><th>操作</th>
             </tr></thead>
             <tbody></tbody>
           </table>
@@ -393,8 +393,8 @@
     <label>域名
       <input name="host" placeholder="留空表示对所有域名生效">
     </label>
-    <label>文件名
-      <input name="filename" required placeholder="MP_verify_xxxxxxxx.txt">
+    <label>路径
+      <input name="filename" required placeholder="MP_verify_xxxxxxxx.txt，可含子目录：h5/xxx.txt">
     </label>
     <label>内容
       <textarea name="content" rows="3" required></textarea>

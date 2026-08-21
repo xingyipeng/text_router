@@ -8,7 +8,7 @@ a2enmod proxy proxy_http rewrite   # Debian / Ubuntu
 
 （CentOS / RHEL 系在配置里 `LoadModule`，或用 `httpd -M | grep proxy` 确认已加载。）
 
-本服务只响应根路径的 `.txt`（`/MP_verify_xxx.txt` 这类），子目录形如 `/h5/xxx.txt` 不会命中——微信校验本身也要求文件位于域名根路径。
+微信校验文件必须位于域名根路径；本服务同时支持子目录路径（如 `/h5/xxx.txt`），一条规则转发任意深度的 `.txt` 即可。若站内其他业务在子目录有自己的 `.txt`，把正则收窄到实际路径前缀（见文末要点）。
 
 ## 443 vhost
 
@@ -17,10 +17,10 @@ a2enmod proxy proxy_http rewrite   # Debian / Ubuntu
     ServerName example.com
     # ... 证书等现有配置 ...
 
-    # 根路径的 .txt 转发给 wx_router。
+    # 任意路径的 .txt 转发给 wx_router。
     # 注意 ProxyPass 结尾不带 / —— 带了 / 会把路径重写掉，微信校验就失败了
     ProxyPreserveHost On
-    <LocationMatch "^/[^/]+\.txt$">
+    <LocationMatch "\.txt$">
         ProxyPass http://127.0.0.1:3000
     </LocationMatch>
 
@@ -38,11 +38,11 @@ a2enmod proxy proxy_http rewrite   # Debian / Ubuntu
 
     RewriteEngine On
     # 不是 .txt 才跳转
-    RewriteCond %{REQUEST_URI} !^/[^/]+\.txt$
+    RewriteCond %{REQUEST_URI} !\.txt$
     RewriteRule ^ https://example.com%{REQUEST_URI} [R=301,L]
 
     ProxyPreserveHost On
-    <LocationMatch "^/[^/]+\.txt$">
+    <LocationMatch "\.txt$">
         ProxyPass http://127.0.0.1:3000
     </LocationMatch>
 </VirtualHost>
@@ -52,12 +52,18 @@ a2enmod proxy proxy_http rewrite   # Debian / Ubuntu
 
 - **`.htaccess` 不支持 `ProxyPass`**（mod_proxy 指令只允许出现在 server / vhost 配置里）。共享主机、只有 .htaccess 权限的环境没法用 Apache 做这个反代，需要换 Nginx / Caddy，或联系主机商在 vhost 里配置
 - `ProxyPreserveHost On` 把原始域名传给 wx_router（Apache 默认会把 Host 改成代理目标的主机名）；`X-Forwarded-Host` 由 mod_proxy 自动携带
-- 站内已有根路径 `.txt`（如 `robots.txt`）时精确排除，不代理：
+- 站内已有 `.txt`（如 `robots.txt`）时精确排除，不代理。注意排除块要写在转发块**之后**——Apache 按配置顺序合并，后写的生效：
 
 ```apache
+    <LocationMatch "\.txt$">
+        ProxyPass http://127.0.0.1:3000
+    </LocationMatch>
+
     <LocationMatch "^/robots\.txt$">
         ProxyPass !
     </LocationMatch>
 ```
+
+- 站内业务在子目录有自己的 `.txt` 时，收窄到实际路径前缀：`<LocationMatch "^/(verify|h5)/.*\.txt$">`
 
 - 接入后到「请求记录」面板确认：能看到 `.txt` 请求、且「解析后」域名正确，即链路已通

@@ -9,13 +9,29 @@ describe('isValidFilename', () => {
   it('接受小程序的无前缀随机串', () => {
     expect(isValidFilename('a1b2c3d4e5f6.txt')).toBe(true);
   });
-  it('拒绝路径分隔符', () => {
-    expect(isValidFilename('a/b.txt')).toBe(false);
-    expect(isValidFilename('..\\b.txt')).toBe(false);
+  it('接受子目录路径', () => {
+    expect(isValidFilename('h5/MP_verify_abc.txt')).toBe(true);
+    expect(isValidFilename('a/b/c/d/x.txt')).toBe(true);
+  });
+  it('接受带点号的段（.well-known、版本号等）', () => {
+    expect(isValidFilename('.well-known/security.txt')).toBe(true);
+    expect(isValidFilename('MP_verify.v1.txt')).toBe(true);
+  });
+  it('拒绝 . 与 .. 段', () => {
+    expect(isValidFilename('a/./x.txt')).toBe(false);
+    expect(isValidFilename('a/../x.txt')).toBe(false);
+    expect(isValidFilename('..txt')).toBe(false);
+    expect(isValidFilename('.txt')).toBe(false);
   });
   it('拒绝路径穿越', () => {
     expect(isValidFilename('../etc/passwd.txt')).toBe(false);
+    expect(isValidFilename('a/../../x.txt')).toBe(false);
     expect(isValidFilename('..%2Fpasswd.txt')).toBe(false);
+  });
+  it('拒绝空段与首尾斜杠', () => {
+    expect(isValidFilename('a//b.txt')).toBe(false);
+    expect(isValidFilename('/a.txt')).toBe(false);
+    expect(isValidFilename('a.txt/')).toBe(false);
   });
   it('拒绝空字节', () => {
     expect(isValidFilename('a\x00.txt')).toBe(false);
@@ -24,8 +40,15 @@ describe('isValidFilename', () => {
     expect(isValidFilename('a.php')).toBe(false);
     expect(isValidFilename('a.txt.php')).toBe(false);
   });
-  it('拒绝超长文件名', () => {
+  it('拒绝超长：单段超过 80', () => {
     expect(isValidFilename('a'.repeat(81) + '.txt')).toBe(false);
+  });
+  it('拒绝超长：总长超过 255', () => {
+    const long = ['a'.repeat(80), 'b'.repeat(80), 'c'.repeat(80), 'd'.repeat(80)].join('/') + '.txt';
+    expect(long.length).toBeGreaterThan(255);
+    expect(isValidFilename(long)).toBe(false);
+    const ok = ['a'.repeat(80), 'b'.repeat(80)].join('/') + '.txt';
+    expect(isValidFilename(ok)).toBe(true);
   });
   it('拒绝非字符串', () => {
     expect(isValidFilename(null)).toBe(false);

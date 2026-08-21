@@ -14,8 +14,12 @@ import { createDocsRoutes } from './routes/docs.js';
 export function createApp({ db, requestLog, config }) {
   const app = new Hono();
 
-  // 校验文件响应：公开路径，不经过任何鉴权中间件
-  app.get('/:filename{[^/]+\\.txt}', createVerifyHandler({ db, requestLog }));
+  // 校验文件响应：公开路径，不经过任何鉴权中间件。
+  // 任意深度的 *.txt 都进入校验处理器；其余路径透传 next()，交给静态文件与 notFound。
+  app.get('*', async (c, next) => {
+    if (!c.req.path.endsWith('.txt')) return next();
+    return createVerifyHandler({ db, requestLog })(c);
+  });
 
   app.use('/api/*', sessionMiddleware({ db }));
   app.route('/api/auth', createAuthRoutes({ db, config }));
