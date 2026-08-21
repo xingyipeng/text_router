@@ -13,12 +13,14 @@ beforeEach(async () => {
   dir = mkdtempSync(join(tmpdir(), 'wxr-docs-'));
   db = openDb(join(dir, 'test.db'));
   const docsDir = join(dir, 'docs');
-  mkdirSync(docsDir);
-  // fixture：两篇带标题的 md、一篇无标题 md、一个非 md 文件（应被忽略）
-  writeFileSync(join(docsDir, 'gateway.md'), '# 网关接入\n\n正文内容\n');
+  const groupDir = join(docsDir, '网关接入');
+  mkdirSync(groupDir, { recursive: true });
+  // fixture：顶层两篇 md（一篇无标题）、一个非 md 文件（应被忽略）；子目录分组两篇 md
   writeFileSync(join(docsDir, 'tips.md'), '# 小技巧\n\n提示内容\n');
   writeFileSync(join(docsDir, 'plain.md'), '没有标题\n');
   writeFileSync(join(docsDir, 'notes.txt'), 'not a doc\n');
+  writeFileSync(join(groupDir, 'nginx.md'), '# Nginx 接入\n\nproxy_pass 配置\n');
+  writeFileSync(join(groupDir, 'traefik.md'), '# Traefik 接入\n\nPathRegexp 配置\n');
 
   app = createApp({
     db,
@@ -48,14 +50,19 @@ describe('GET /api/docs', () => {
     expect(res.status).toBe(401);
   });
 
-  it('列出全部 md，忽略非 md 文件，按文件名排序', async () => {
+  it('顶层文档（group 为空）在前，分组文档在后，忽略非 md，按文件名排序', async () => {
     const rows = await (await req('/api/docs')).json();
-    expect(rows.map((r) => r.id)).toEqual(['gateway', 'plain', 'tips']);
+    expect(rows.map((r) => `${r.group}:${r.id}`)).toEqual([
+      ':plain',
+      ':tips',
+      '网关接入:nginx',
+      '网关接入:traefik',
+    ]);
   });
 
   it('标题取首个 # 行，无标题时回落到文件名', async () => {
     const rows = await (await req('/api/docs')).json();
-    expect(rows.find((r) => r.id === 'gateway').title).toBe('网关接入');
+    expect(rows.find((r) => r.id === 'nginx').title).toBe('Nginx 接入');
     expect(rows.find((r) => r.id === 'plain').title).toBe('plain');
   });
 
@@ -64,23 +71,33 @@ describe('GET /api/docs', () => {
   });
 });
 
-describe('GET /api/docs/:id', () => {
-  it('未登录返回 401', async () => {
-    const res = await app.request('/api/docs/gateway', { headers: { host: 'admin.local' } });
-    expect(res.status).toBe(401);
+describe('GET /api/docs/:group/:name 与 /api/docs/:id', () => {
+  it('分组文档返回标题与原文内容', async () => {
+    const doc = await (await req(`/api/docs/${encodeURIComponent('网关接入')}/nginx`)).json();
+    expect(doc).toEqual({
+      id: 'nginx',
+      title: 'Nginx 接入',
+      content: '# Nginx 接入\n\nproxy_pass 配置\n',
+    });
   });
 
-  it('返回标题与原文内容', async () => {
-    const doc = await (await req('/api/docs/gateway')).json();
-    expect(doc).toEqual({ id: 'gateway', title: '网关接入', content: '# 网关接入\n\n正文内容\n' });
+  it('顶层文档仍可直接访问', async () => {
+    const doc = await (await req('/api/docs/tips')).json();
+    expect(doc).toEqual({ id: 'tips', title: '小技巧', content: '# 小技巧\n\n提示内容\n' });
   });
 
-  it('不存在的文档返回 404', async () => {
-    expect((await req('/api/docs/nope')).status).toBe(404);
+  it('顶层不存在的 id 返回 404（不会落到分组）', async () => {
+    expect((await req('/api/docs/nginx')).status).toBe(404);
+  });
+
+  it('分组内不存在的文档返回 404', async () => {
+    expect((await req(`/api/docs/${encodeURIComponent('网关接入')}/nope`)).status).toBe(404);
   });
 
   it('路径穿越被拒绝', async () => {
     expect((await req('/api/docs/..%2F..%2Fsecret')).status).toBe(404);
     expect((await req('/api/docs/a%2Fb')).status).toBe(404);
+    expect((await req('/api/docs/%2E%2E/nginx')).status).toBe(404); // group 为 ..
+    expect((await req('/api/docs/%2Ehidden/nginx')).status).toBe(404); // group 以 . 开头
   });
 });

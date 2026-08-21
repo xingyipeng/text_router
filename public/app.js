@@ -189,8 +189,6 @@ $('#login-form').addEventListener('submit', async (e) => {
   }
 });
 
-$('#btn-help').addEventListener('click', () => switchTab('help'));
-
 $('#btn-logout').addEventListener('click', async () => {
   await api('/api/auth/logout', { method: 'POST' }).catch(() => {});
   state.me = null;

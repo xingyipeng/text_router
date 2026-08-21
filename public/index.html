@@ -117,7 +117,6 @@
     <header class="topbar">
       <h1 id="page-title">看板</h1>
       <div class="top-user">
-        <button id="btn-help" class="btn sm">帮助</button>
         <span class="avatar" id="me-avatar" aria-hidden="true"></span>
         <span id="me-name" class="top-name"></span>
         <svg class="top-caret" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m4 6 4 4 4-4"/></svg>
@@ -371,6 +370,9 @@
       <div id="panel-help" class="panel" hidden>
         <div class="help-layout">
           <aside class="help-side">
+            <div class="help-search">
+              <input id="help-search" type="search" placeholder="搜索文档…" aria-label="搜索文档">
+            </div>
             <nav id="help-list" aria-label="帮助文档列表"></nav>
           </aside>
           <article id="help-content" class="markdown-body"></article>

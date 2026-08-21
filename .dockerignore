@@ -6,6 +6,7 @@ docs/superpowers
 test
 vitest.config.js
 *.md
-!docs/*.md
+!docs/**/*.md
+docs/superpowers/**
 .env
 .omc

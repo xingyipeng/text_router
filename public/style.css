@@ -660,6 +660,16 @@ dialog menu .btn { min-width: 72px; }
   position: sticky;
   top: 12px;
 }
+.help-search { padding: 2px 4px 10px; }
+.help-search input { font-size: 13px; padding: 7px 10px; }
+.help-group {
+  margin: 12px 10px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: .06em;
+  color: var(--text-3);
+}
+.help-group + .help-item { margin-top: 2px; }
 #help-list { display: flex; flex-direction: column; gap: 2px; }
 .help-item {
   appearance: none;
