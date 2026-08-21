@@ -1,7 +1,10 @@
+# 项目名固定为 text_router（不依赖部署目录名），服务名用 app，镜像名即 text_router_app
+name: text_router
+
 services:
-  wx_router:
+  app:
     build: .
-    container_name: wx_router
+    container_name: app
     restart: unless-stopped
     ports:
       - "${PORT:-3000}:3000"

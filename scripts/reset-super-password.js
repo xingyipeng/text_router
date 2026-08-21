@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { openDb } from '../src/db.js';
+import { DB_FILENAME, migrateLegacyDb, openDb } from '../src/db.js';
 import { resetSuperPassword } from '../src/init.js';
 
 const newPassword = process.argv[2];
@@ -9,7 +9,8 @@ if (!newPassword) {
 }
 
 const dataDir = process.env.DATA_DIR || './data';
-const db = openDb(join(dataDir, 'wx_router.db'));
+migrateLegacyDb(dataDir);
+const db = openDb(join(dataDir, DB_FILENAME));
 
 try {
   const su = resetSuperPassword(db, newPassword);

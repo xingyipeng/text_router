@@ -8,7 +8,8 @@ import { join, basename } from 'node:path';
 // 备份管理核心：CLI（scripts/backup.js）与 HTTP 路由共用。
 // 备份用 better-sqlite3 在线备份 API，运行中的服务无需停机、快照一致。
 
-export const BACKUP_NAME_RE = /^wx_router-\d{8}-\d{6}(-\d+)?\.db$/;
+// 新备份用 text_router- 前缀；旧前缀 wx_router- 仍可识别，保证老部署的存量备份在界面照常列表/恢复/删除
+export const BACKUP_NAME_RE = /^(?:wx_router|text_router)-\d{8}-\d{6}(-\d+)?\.db$/;
 
 function stamp(d = new Date()) {
   const p = (n) => String(n).padStart(2, '0');
@@ -35,7 +36,7 @@ export function pruneBackups(dir, keep) {
 export async function runBackup(db, dir, keep) {
   mkdirSync(dir, { recursive: true });
 
-  const base = join(dir, `wx_router-${stamp()}`);
+  const base = join(dir, `text_router-${stamp()}`);
   let finalPath = `${base}.db`;
   let n = 1;
   while (existsSync(finalPath)) finalPath = `${base}-${n++}.db`;

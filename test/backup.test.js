@@ -67,21 +67,21 @@ describe('runBackup / 剪枝', () => {
     const bk = join(dir, 'prune');
     mkdirSync(bk, { recursive: true });
     for (const f of [
-      'wx_router-20240101-000000.db',
-      'wx_router-20240102-000000.db',
-      'wx_router-20240103-000000.db',
+      'text_router-20240101-000000.db',
+      'text_router-20240102-000000.db',
+      'text_router-20240103-000000.db',
       'junk.txt',
-      'wx_router-20240103-000000.db.tmp',
+      'text_router-20240103-000000.db.tmp',
     ]) {
       writeFileSync(join(bk, f), 'x');
     }
     const removed = pruneBackups(bk, 2);
-    expect(removed).toEqual(['wx_router-20240101-000000.db']);
+    expect(removed).toEqual(['text_router-20240101-000000.db']);
     expect(readdirSync(bk).sort()).toEqual([
       'junk.txt',
-      'wx_router-20240102-000000.db',
-      'wx_router-20240103-000000.db',
-      'wx_router-20240103-000000.db.tmp',
+      'text_router-20240102-000000.db',
+      'text_router-20240103-000000.db',
+      'text_router-20240103-000000.db.tmp',
     ]);
   });
 });
@@ -102,18 +102,18 @@ describe('listBackups / deleteBackup', () => {
 
   it('过滤无关文件并按名字新到旧排序', () => {
     for (const f of [
-      'wx_router-20240101-000000.db',
-      'wx_router-20240102-000000.db',
-      'wx_router-20240103-000000-1.db',
+      'text_router-20240101-000000.db',
+      'text_router-20240102-000000.db',
+      'text_router-20240103-000000-1.db',
       'junk.txt',
     ]) {
       writeFileSync(join(dir, f), 'x');
     }
     const list = listBackups(dir);
     expect(list.map((b) => b.name)).toEqual([
-      'wx_router-20240103-000000-1.db',
-      'wx_router-20240102-000000.db',
-      'wx_router-20240101-000000.db',
+      'text_router-20240103-000000-1.db',
+      'text_router-20240102-000000.db',
+      'text_router-20240101-000000.db',
     ]);
     expect(list[0].size).toBe(1);
     expect(list[0].mtimeMs).toBeGreaterThan(0);
@@ -121,17 +121,28 @@ describe('listBackups / deleteBackup', () => {
 
   it('deleteBackup 拒绝白名单外的名字', () => {
     expect(() => deleteBackup(dir, '../evil.db')).toThrow('非法的备份文件名');
-    expect(() => deleteBackup(dir, 'wx_router-20240101-000000.db.tmp')).toThrow('非法的备份文件名');
+    expect(() => deleteBackup(dir, 'text_router-20240101-000000.db.tmp')).toThrow('非法的备份文件名');
+  });
+
+  it('旧前缀 wx_router- 的存量备份仍可识别与删除', () => {
+    writeFileSync(join(dir, 'wx_router-20240101-000000.db'), 'x');
+    writeFileSync(join(dir, 'text_router-20240102-000000.db'), 'x');
+    expect(listBackups(dir).map((b) => b.name)).toEqual([
+      'text_router-20240102-000000.db',
+      'wx_router-20240101-000000.db',
+    ]);
+    deleteBackup(dir, 'wx_router-20240101-000000.db');
+    expect(existsSync(join(dir, 'wx_router-20240101-000000.db'))).toBe(false);
   });
 
   it('deleteBackup 删除不存在的备份时报错', () => {
-    expect(() => deleteBackup(dir, 'wx_router-20240101-000000.db')).toThrow('备份不存在');
+    expect(() => deleteBackup(dir, 'text_router-20240101-000000.db')).toThrow('备份不存在');
   });
 
   it('deleteBackup 成功删除', () => {
-    writeFileSync(join(dir, 'wx_router-20240101-000000.db'), 'x');
-    deleteBackup(dir, 'wx_router-20240101-000000.db');
-    expect(existsSync(join(dir, 'wx_router-20240101-000000.db'))).toBe(false);
+    writeFileSync(join(dir, 'text_router-20240101-000000.db'), 'x');
+    deleteBackup(dir, 'text_router-20240101-000000.db');
+    expect(existsSync(join(dir, 'text_router-20240101-000000.db'))).toBe(false);
   });
 });
 
@@ -254,9 +265,9 @@ describe('备份路由', () => {
     ['/api/backups', 'POST'],
     ['/api/backups', 'GET'],
     ['/api/backups/upload', 'POST'],
-    ['/api/backups/wx_router-20240101-000000.db/download', 'GET'],
-    ['/api/backups/wx_router-20240101-000000.db', 'DELETE'],
-    ['/api/backups/wx_router-20240101-000000.db/restore', 'POST'],
+    ['/api/backups/text_router-20240101-000000.db/download', 'GET'],
+    ['/api/backups/text_router-20240101-000000.db', 'DELETE'],
+    ['/api/backups/text_router-20240101-000000.db/restore', 'POST'],
   ];
 
   describe('权限', () => {
@@ -350,7 +361,7 @@ describe('备份路由', () => {
         ['/api/backups/evil.db', 'DELETE'],
         ['/api/backups/evil.db/restore', 'POST'],
         ['/api/backups/..%2Ftest.db/download', 'GET'],
-        ['/api/backups/wx_router-20240101-000000.db.tmp/download', 'GET'],
+        ['/api/backups/text_router-20240101-000000.db.tmp/download', 'GET'],
       ];
       for (const [path, method] of cases) {
         const res = await as(superCookie)(path, method);
@@ -359,7 +370,7 @@ describe('备份路由', () => {
     });
 
     it('删除不存在的备份 404', async () => {
-      const res = await as(superCookie)('/api/backups/wx_router-20240101-000000.db', 'DELETE');
+      const res = await as(superCookie)('/api/backups/text_router-20240101-000000.db', 'DELETE');
       expect(res.status).toBe(404);
     });
   });
@@ -432,7 +443,7 @@ describe('恢复备份', () => {
   });
 
   it('备份文件不存在 500 且不触发重启', async () => {
-    const res = await post('/api/backups/wx_router-20240101-000000.db/restore');
+    const res = await post('/api/backups/text_router-20240101-000000.db/restore');
     expect(res.status).toBe(500);
     expect((await res.json()).error).toContain('恢复失败');
     expect(restartCalled).toBe(false);

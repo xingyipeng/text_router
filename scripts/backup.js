@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { runBackup } from '../src/backup.js';
+import { DB_FILENAME, migrateLegacyDb } from '../src/db.js';
 
 // CLI 薄壳：备份核心在 src/backup.js，与界面里的「立即备份」共用同一套逻辑。
 // 用法：node scripts/backup.js [--dir 备份目录] [--keep 保留份数] [--data-dir 数据目录]
@@ -10,12 +11,12 @@ import { runBackup } from '../src/backup.js';
 const usage = `用法：node scripts/backup.js [--dir 备份目录] [--keep 保留份数] [--data-dir 数据目录]
 
 对运行中的数据库做一致性在线备份（SQLite backup API），无需停机。
-每份备份命名为 wx_router-YYYYMMDD-HHMMSS.db，写完后校验完整性再原子改名，
+每份备份命名为 text_router-YYYYMMDD-HHMMSS.db，写完后校验完整性再原子改名，
 并只保留最近 --keep 份（默认 14）。
 
 示例：
   node scripts/backup.js --dir ./backups --keep 14
-  docker compose exec -T wx_router node scripts/backup.js --dir /app/data/backups --keep 30`;
+  docker compose exec -T app node scripts/backup.js --dir /app/data/backups --keep 30`;
 
 function parseArgs(argv) {
   const opts = {
@@ -40,7 +41,8 @@ function parseArgs(argv) {
 }
 
 const opts = parseArgs(process.argv.slice(2));
-const dbPath = join(opts.dataDir, 'wx_router.db');
+migrateLegacyDb(opts.dataDir);
+const dbPath = join(opts.dataDir, DB_FILENAME);
 if (!existsSync(dbPath)) {
   console.error(`失败：找不到数据库文件 ${dbPath}`);
   process.exit(1);

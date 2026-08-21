@@ -9,10 +9,10 @@ server {
     listen 443 ssl;
     server_name example.com;
 
-    # 任意路径的 .txt 转发给 wx_router。
+    # 任意路径的 .txt 转发给 text_router。
     # 注意 proxy_pass 结尾不带 / —— 带了 / 会把路径重写掉，微信校验就失败了
     location ~* \.txt$ {
-        proxy_pass http://127.0.0.1:3000;          # wx_router 在别的机器上就换成内网地址
+        proxy_pass http://127.0.0.1:3000;          # text_router 在别的机器上就换成内网地址
         proxy_set_header Host $host;               # nginx 默认就传 Host，显式写出更稳
         proxy_set_header X-Forwarded-Host $host;   # 服务优先读这个头，双保险
     }

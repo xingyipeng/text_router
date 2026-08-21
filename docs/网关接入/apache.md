@@ -17,7 +17,7 @@ a2enmod proxy proxy_http rewrite   # Debian / Ubuntu
     ServerName example.com
     # ... 证书等现有配置 ...
 
-    # 任意路径的 .txt 转发给 wx_router。
+    # 任意路径的 .txt 转发给 text_router。
     # 注意 ProxyPass 结尾不带 / —— 带了 / 会把路径重写掉，微信校验就失败了
     ProxyPreserveHost On
     <LocationMatch "\.txt$">
@@ -51,7 +51,7 @@ a2enmod proxy proxy_http rewrite   # Debian / Ubuntu
 ## 要点
 
 - **`.htaccess` 不支持 `ProxyPass`**（mod_proxy 指令只允许出现在 server / vhost 配置里）。共享主机、只有 .htaccess 权限的环境没法用 Apache 做这个反代，需要换 Nginx / Caddy，或联系主机商在 vhost 里配置
-- `ProxyPreserveHost On` 把原始域名传给 wx_router（Apache 默认会把 Host 改成代理目标的主机名）；`X-Forwarded-Host` 由 mod_proxy 自动携带
+- `ProxyPreserveHost On` 把原始域名传给 text_router（Apache 默认会把 Host 改成代理目标的主机名）；`X-Forwarded-Host` 由 mod_proxy 自动携带
 - 站内已有 `.txt`（如 `robots.txt`）时精确排除，不代理。注意排除块要写在转发块**之后**——Apache 按配置顺序合并，后写的生效：
 
 ```apache

@@ -7,7 +7,7 @@ example.com {
     # 任意路径的 .txt
     @verify path_regexp \.txt$
 
-    # 反代给 wx_router；Caddy 不重写路径，并自动带 X-Forwarded-Host
+    # 反代给 text_router；Caddy 不重写路径，并自动带 X-Forwarded-Host
     reverse_proxy @verify 127.0.0.1:3000
 
     # 其余业务流量照常处理

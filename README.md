@@ -1,4 +1,4 @@
-# wx_router
+# text_router
 
 集中管理微信域名校验文件（`MP_verify_xxx.txt`、小程序业务域名校验文件等），并响应微信爬虫的抓取请求。
 
@@ -33,6 +33,13 @@ SUPER_ADMIN_USER=admin SUPER_ADMIN_PASSWORD=your-password npm start
 - **自动重启**：`restart: unless-stopped`，进程退出后 Docker 自动拉起（界面「恢复」功能依赖这一点）
 - **环境变量**：从 `.env` 读取传给容器（`SUPER_ADMIN_*`、`PORT`、`SESSION_TTL_HOURS`、`COOKIE_SECURE`）；`DATA_DIR` / `BACKUP_DIR` 已由 compose 固定为容器内路径，无需额外设置
 
+### 从 wx_router 升级改名（一次性）
+
+本项目已改名 text_router（compose 项目名 `text_router`、服务名 `app`）。旧部署升级时：
+
+1. 用旧版 compose 文件先停掉旧容器：`docker compose down`（新旧项目名不同，不停旧容器会抢 3000 端口）
+2. 拉新代码后 `docker compose up -d`。宿主机 `./data` 原样沿用：启动时自动把旧库 `wx_router.db` 改名为 `text_router.db`；存量备份（`wx_router-*.db`）在界面照常列表、恢复、删除
+
 ### 跨平台打包
 
 在 x86 机器上构建的镜像拿到 arm 机器上跑会失败（反之亦然）：`better-sqlite3` 是原生模块，与构建机架构绑死。用构建脚本一次产出 `linux/amd64` + `linux/arm64` 双架构镜像并推送：
@@ -43,11 +50,11 @@ SUPER_ADMIN_USER=admin SUPER_ADMIN_PASSWORD=your-password npm start
 # Docker Desktop（macOS/Windows）已内置，无需这步。
 
 scripts/build-docker.sh --push \
-  -t registry.example.com/wx-router:1.0.0 \
-  -t registry.example.com/wx-router:latest
+  -t registry.example.com/text-router:1.0.0 \
+  -t registry.example.com/text-router:latest
 ```
 
-服务器上把 compose 里的 `build: .` 换成 `image: registry.example.com/wx-router:1.0.0`，之后升级版本：
+服务器上把 compose 里的 `build: .` 换成 `image: registry.example.com/text-router:1.0.0`，之后升级版本：
 
 ```bash
 docker compose pull && docker compose up -d   # ./data 数据卷原样沿用，业务数据不受影响
@@ -65,9 +72,9 @@ Dockerfile 无需改动：两阶段构建——第一阶段在 `node:22-slim` �
 
 ```bash
 # 服务器是 x86_64（arm64 就把平台换成 linux/arm64）：
-docker buildx build --platform linux/amd64 -t wx-router:1.0.0 -o type=docker,dest=wx-router-amd64.tar .
+docker buildx build --platform linux/amd64 -t text-router:1.0.0 -o type=docker,dest=text-router-amd64.tar .
 # 服务器上：
-docker load -i wx-router-amd64.tar
+docker load -i text-router-amd64.tar
 ```
 
 ## 网关需要做什么
@@ -139,12 +146,12 @@ docker load -i wx-router-amd64.tar
 
 ## 备份
 
-数据库是 `DATA_DIR/wx_router.db`（Docker 部署即宿主机 `./data/wx_router.db`）。备份已做成系统内置功能，**超管登录后在「备份」页**即可操作：
+数据库是 `DATA_DIR/text_router.db`（Docker 部署即宿主机 `./data/text_router.db`）。备份已做成系统内置功能，**超管登录后在「备份」页**即可操作：
 
 - **立即备份**：一键创建，走 SQLite 在线备份 API——任意时刻都是一致快照，服务无需停机
-- **列表 / 下载 / 删除**：每份备份命名为 `wx_router-YYYYMMDD-HHMMSS.db`，写完先做 `integrity_check` 校验再原子改名，并按「保留份数」自动清理最旧的
+- **列表 / 下载 / 删除**：每份备份命名为 `text_router-YYYYMMDD-HHMMSS.db`，写完先做 `integrity_check` 校验再原子改名，并按「保留份数」自动清理最旧的
 - **每日定时备份**：进程内置定时器（默认关闭；开启后每天 03:17 执行，默认保留 14 份），不依赖外部 cron
-- **恢复**：选一份备份恢复——服务先校验备份完整性，把现有库留底为 `wx_router.db.before-restore`，替换库文件后**自动重启**，期间服务短暂不可用
+- **恢复**：选一份备份恢复——服务先校验备份完整性，把现有库留底为 `text_router.db.before-restore`，替换库文件后**自动重启**，期间服务短暂不可用
 - **上传恢复**：把另一台服务器的库文件（或其备份）直接上传——服务校验完整性后同样替换库文件并自动重启，旧库同样留底。迁移时无需登录服务器拷贝文件
 
 备份文件写在 `BACKUP_DIR`（默认 `./backups`；compose 已设为 `/app/data/backups`，即宿主机 `./data/backups`，备份随数据卷持久化）。
@@ -158,22 +165,22 @@ docker load -i wx-router-amd64.tar
 node scripts/backup.js --dir ./backups --keep 14
 
 # Docker 部署（备份写进已挂载的 ./data/backups，自然落在宿主机）：
-docker compose exec -T wx_router node scripts/backup.js --dir /app/data/backups --keep 30
+docker compose exec -T app node scripts/backup.js --dir /app/data/backups --keep 30
 ```
 
 参数也可用环境变量 `BACKUP_DIR` / `KEEP` / `DATA_DIR` 代替（`KEEP` 只对 CLI 脚本生效；界面定时备份的保留份数在「设置」页设置）。脚本只读打开源库，不写运行中的库。配合 crontab 的定时示例：
 
 ```cron
-17 3 * * * cd /opt/wx_router && docker compose exec -T wx_router node scripts/backup.js --dir /app/data/backups --keep 30 >> /var/log/wx_router-backup.log 2>&1
+17 3 * * * cd /opt/text_router && docker compose exec -T app node scripts/backup.js --dir /app/data/backups --keep 30 >> /var/log/text_router-backup.log 2>&1
 ```
 
 **手工恢复**（界面恢复不可用时，把 `YYYYMMDD-HHMMSS` 换成实际备份名）：
 
 ```bash
 docker compose stop
-rm -f data/wx_router.db-wal data/wx_router.db-shm     # 清掉旧库的 WAL 残留
-mv data/wx_router.db data/wx_router.db.before-restore # 现有库留底
-cp backups/wx_router-YYYYMMDD-HHMMSS.db data/wx_router.db
+rm -f data/text_router.db-wal data/text_router.db-shm     # 清掉旧库的 WAL 残留
+mv data/text_router.db data/text_router.db.before-restore # 现有库留底
+cp backups/text_router-YYYYMMDD-HHMMSS.db data/text_router.db
 docker compose start
 ```
 
@@ -192,7 +199,7 @@ docker compose start
 超管不可被删除也不可降级，所以没有 HTTP 途径可以重置。用救援脚本：
 
 ```bash
-docker compose exec wx_router node scripts/reset-super-password.js <新密码>
+docker compose exec app node scripts/reset-super-password.js <新密码>
 ```
 
 它直接操作数据库，重算密码哈希、清除该账号所有会话，并顺带解除禁用状态（万一有人直接改库把超管禁用了）。

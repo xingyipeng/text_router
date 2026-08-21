@@ -68,7 +68,7 @@ export function createRulesRoutes({ db, fetchImpl }) {
     const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14); // YYYYMMDDHHmmss
     return c.json(payload, 200, {
       'Content-Type': 'application/json; charset=utf-8',
-      'Content-Disposition': `attachment; filename="wx_router-rules-${stamp}.json"`,
+      'Content-Disposition': `attachment; filename="text_router-rules-${stamp}.json"`,
       'Cache-Control': 'no-store',
     });
   });

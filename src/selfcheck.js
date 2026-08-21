@@ -70,7 +70,7 @@ export async function runExternalCheck(file, { fetchImpl = fetch, timeoutMs = 80
     res = await fetchImpl(url, {
       redirect: 'manual',
       signal: AbortSignal.timeout(timeoutMs),
-      headers: { 'User-Agent': 'wx-router-selfcheck/1.0' },
+      headers: { 'User-Agent': 'text-router-selfcheck/1.0' },
     });
   } catch (err) {
     return {

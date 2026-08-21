@@ -1,6 +1,22 @@
 import Database from 'better-sqlite3';
-import { mkdirSync } from 'node:fs';
-import { dirname } from 'node:path';
+import { existsSync, mkdirSync, renameSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+
+export const DB_FILENAME = 'text_router.db';
+
+// 一次性迁移：旧版库文件 wx_router.db 存在且新文件名不存在时改名为 text_router.db。
+// -wal/-shm 伴生文件必须一起搬：WAL 里可能还有未 checkpoint 的数据，只搬主文件会丢最近的写入。
+// 服务端与 CLI 脚本共用，无论谁先启动都只迁移一次，老部署数据不丢。
+export function migrateLegacyDb(dataDir) {
+  const legacy = join(dataDir, 'wx_router.db');
+  const current = join(dataDir, DB_FILENAME);
+  if (!existsSync(legacy) || existsSync(current)) return false;
+  renameSync(legacy, current);
+  for (const ext of ['-wal', '-shm']) {
+    if (existsSync(legacy + ext)) renameSync(legacy + ext, current + ext);
+  }
+  return true;
+}
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (

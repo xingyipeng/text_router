@@ -4,13 +4,13 @@
 
 ## Kong
 
-用一条正则路由把任意路径的 `.txt` 指向 wx_router 的 service：
+用一条正则路由把任意路径的 `.txt` 指向 text_router 的 service：
 
 ```yaml
 # 声明式配置（kong.yml），Admin API 等价写法同理
 _format_version: "3.0"
 services:
-  - name: wx-router
+  - name: text-router
     url: http://127.0.0.1:3000
 
 routes:
@@ -18,7 +18,7 @@ routes:
     paths: ["~/^/.*\\.txt$"]      # ~ 前缀表示正则路由
     strip_path: false             # 不重写路径，保留原始 URI
     preserve_host: true           # 原始 Host 原样传给上游
-    service: wx-router
+    service: text-router
 ```
 
 要点：
@@ -40,7 +40,7 @@ routes:
       - ["uri", "~~", ".*\\.txt$"]        # ~~ 表示正则匹配
     upstream:
       type: roundrobin
-      pass_host: pass                     # 原始 Host 原样传给 wx_router
+      pass_host: pass                     # 原始 Host 原样传给 text_router
       nodes:
         "127.0.0.1:3000": 1
 ```
@@ -48,7 +48,7 @@ routes:
 要点：
 
 - `vars` 里的 `~~` 表示对 uri 做正则匹配
-- `pass_host: pass` 保留原始 Host（默认 `rewrite` 会改成上游节点的主机名，wx_router 就认不出域名了）
+- `pass_host: pass` 保留原始 Host（默认 `rewrite` 会改成上游节点的主机名，text_router 就认不出域名了）
 - 不配置 proxy-rewrite 插件即不重写路径
 - 站内已有 `.txt`（如 `robots.txt`）时，加一条 `["uri", "!", "~~", "^/robots\\.txt$"]` 到 vars 里否定排除
 - 站内业务在子目录有自己的 `.txt` 时，收窄到实际路径前缀：`["uri", "~~", "^/(verify|h5)/.*\\.txt$"]`

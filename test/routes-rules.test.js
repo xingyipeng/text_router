@@ -372,7 +372,7 @@ describe('GET /api/rules/export', () => {
     const res = await api('/api/rules/export');
     expect(res.status).toBe(200);
     expect(res.headers.get('content-disposition'))
-      .toMatch(/^attachment; filename="wx_router-rules-\d{14}\.json"$/);
+      .toMatch(/^attachment; filename="text_router-rules-\d{14}\.json"$/);
     const body = await res.json();
     expect(body.version).toBe(1);
     expect(body.exported_at).toBeTruthy();

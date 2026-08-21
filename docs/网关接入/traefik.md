@@ -4,7 +4,7 @@
 
 ## Docker 标签方式
 
-（wx_router 与 Traefik 同一 compose 网络）：
+（text_router 与 Traefik 同一 compose 网络）：
 
 ```yaml
 labels:
@@ -21,9 +21,9 @@ http:
   routers:
     wxverify:
       rule: "Host(`example.com`) && PathRegexp(`.*\\.txt$`)"
-      service: wxrouter
+      service: textrouter
   services:
-    wxrouter:
+    textrouter:
       loadBalancer:
         servers:
           - url: "http://127.0.0.1:3000"

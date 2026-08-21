@@ -1,6 +1,6 @@
 import { serve } from '@hono/node-server';
 import { join } from 'node:path';
-import { openDb } from './db.js';
+import { DB_FILENAME, migrateLegacyDb, openDb } from './db.js';
 import { createRequestLog } from './requestlog.js';
 import { createApp } from './app.js';
 import { ensureSuperAdmin } from './init.js';
@@ -10,7 +10,7 @@ const dataDir = process.env.DATA_DIR || './data';
 const config = {
   port: Number(process.env.PORT || 3000),
   dataDir,
-  dbPath: join(dataDir, 'wx_router.db'),
+  dbPath: join(dataDir, DB_FILENAME),
   backupDir: process.env.BACKUP_DIR || './backups',
   sessionTtlHours: Number(process.env.SESSION_TTL_HOURS || 168),
   cookieSecure: process.env.COOKIE_SECURE === 'true',
@@ -20,6 +20,9 @@ const config = {
   restartImpl: () => setTimeout(() => process.exit(0), 200),
 };
 
+if (migrateLegacyDb(dataDir)) {
+  console.log(`[init] 已把旧库文件 wx_router.db 迁移为 ${DB_FILENAME}`);
+}
 const db = openDb(config.dbPath);
 
 try {
@@ -43,6 +46,6 @@ const app = createApp({ db, requestLog: createRequestLog(), config });
 startBackupScheduler({ db, dir: config.backupDir });
 
 serve({ fetch: app.fetch, port: config.port }, (info) => {
-  console.log(`[ready] wx_router 已启动：http://localhost:${info.port}/`);
+  console.log(`[ready] text_router 已启动：http://localhost:${info.port}/`);
   console.log(`[ready] 数据目录 ${config.dataDir}，备份目录 ${config.backupDir}`);
 });

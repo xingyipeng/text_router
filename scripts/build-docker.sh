@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 跨平台构建 wx_router Docker 镜像（默认 linux/amd64 + linux/arm64）
+# 跨平台构建 text_router Docker 镜像（默认 linux/amd64 + linux/arm64）
 # 用法见 README「Docker 部署与打包」，或 scripts/build-docker.sh --help
 set -euo pipefail
 
@@ -13,7 +13,7 @@ usage() {
 用法：scripts/build-docker.sh [选项]
 
 选项：
-  -t, --tag TAG      镜像名，可重复指定多个标签（默认 wx-router:latest；推送时写成 registry.example.com/命名空间/名字:版本）
+  -t, --tag TAG      镜像名，可重复指定多个标签（默认 text-router:latest；推送时写成 registry.example.com/命名空间/名字:版本）
   --platform LIST    目标平台，逗号分隔（默认 linux/amd64,linux/arm64）
   --push             构建后推送到镜像仓库（需配合 -t 指定仓库地址）
   --load             只构建本机架构并载入本地 Docker（试跑用；不能与 --push 同用，不能多平台）
@@ -21,7 +21,7 @@ usage() {
   -h, --help         显示本帮助
 
 示例：
-  scripts/build-docker.sh --push -t registry.example.com/wx-router:1.0.0 -t registry.example.com/wx-router:latest
+  scripts/build-docker.sh --push -t registry.example.com/text-router:1.0.0 -t registry.example.com/text-router:latest
   scripts/build-docker.sh --load              # 本机试跑
 EOF
 }
@@ -39,7 +39,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ ${#TAGS[@]} -eq 0 ]; then
-  TAGS=(wx-router:latest)
+  TAGS=(text-router:latest)
 fi
 TAG_ARGS=()
 for t in "${TAGS[@]}"; do TAG_ARGS+=(-t "$t"); done

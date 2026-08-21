@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { openDb } from '../src/db.js';
+import { openDb, migrateLegacyDb } from '../src/db.js';
 
 let dir, db;
 
@@ -61,5 +61,43 @@ describe('openDb', () => {
       VALUES (?,?,?,?,?)`);
     ins.run('a.com', 'x.txt', 'v1', 1, 1);
     expect(() => ins.run('b.com', 'x.txt', 'v2', 2, 2)).not.toThrow();
+  });
+});
+
+describe('migrateLegacyDb', () => {
+  it('旧 wx_router.db 改名为 text_router.db', () => {
+    writeFileSync(join(dir, 'wx_router.db'), 'legacy');
+    expect(migrateLegacyDb(dir)).toBe(true);
+    expect(existsSync(join(dir, 'wx_router.db'))).toBe(false);
+    expect(existsSync(join(dir, 'text_router.db'))).toBe(true);
+  });
+
+  it('幂等：第二次调用不再迁移', () => {
+    writeFileSync(join(dir, 'wx_router.db'), 'legacy');
+    migrateLegacyDb(dir);
+    expect(migrateLegacyDb(dir)).toBe(false);
+  });
+
+  it('新文件已存在时不覆盖', () => {
+    writeFileSync(join(dir, 'wx_router.db'), 'legacy');
+    writeFileSync(join(dir, 'text_router.db'), 'current');
+    expect(migrateLegacyDb(dir)).toBe(false);
+    expect(existsSync(join(dir, 'wx_router.db'))).toBe(true);
+  });
+
+  it('没有旧文件时无事发生', () => {
+    expect(migrateLegacyDb(dir)).toBe(false);
+  });
+
+  it('WAL 伴生文件一起迁移', () => {
+    writeFileSync(join(dir, 'wx_router.db'), 'main');
+    writeFileSync(join(dir, 'wx_router.db-wal'), 'wal');
+    writeFileSync(join(dir, 'wx_router.db-shm'), 'shm');
+    expect(migrateLegacyDb(dir)).toBe(true);
+    expect(existsSync(join(dir, 'text_router.db'))).toBe(true);
+    expect(existsSync(join(dir, 'text_router.db-wal'))).toBe(true);
+    expect(existsSync(join(dir, 'text_router.db-shm'))).toBe(true);
+    expect(existsSync(join(dir, 'wx_router.db-wal'))).toBe(false);
+    expect(existsSync(join(dir, 'wx_router.db-shm'))).toBe(false);
   });
 });
