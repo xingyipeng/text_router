@@ -78,6 +78,14 @@ export function matchFile(db, host, filename) {
   `).get(filename, host);
 }
 
+// 按唯一部分索引查活动行（未删除）的 id，供导入冲突判断（skip/overwrite）用
+export function findActiveByHostFilename(db, host, filename) {
+  return db.prepare(`
+    SELECT id FROM verify_files
+    WHERE host = ? AND filename = ? AND deleted_at IS NULL
+  `).get(host, filename);
+}
+
 const SORTS = {
   updated: { expr: 'f.updated_at', defaultDir: 'DESC' },
   host: { expr: 'f.host, f.filename', defaultDir: 'ASC' },

@@ -88,7 +88,7 @@ docker load -i wx-router-amd64.tar
 | `BACKUP_DIR` | `./backups` | 备份文件目录（compose 已改为 `/app/data/backups`，随数据卷持久化） |
 | `SUPER_ADMIN_USER` | `admin` | 仅在数据库为空时用于创建超管 |
 | `SUPER_ADMIN_PASSWORD` | `admin123` | 同上；至少 8 位 |
-| `SESSION_TTL_HOURS` | `168` | 会话有效期（7 天） |
+| `SESSION_TTL_HOURS` | `168` | 会话有效期（7 天），可在界面「设置」中覆盖（只影响新会话） |
 | `COOKIE_SECURE` | `false` | 部署在 HTTPS 后面时设为 `true` |
 
 数据库非空时 `SUPER_ADMIN_*` 会被忽略，重启不会重置任何账号。数据库为空且未设置时，会用默认账号 `admin/admin123` 自动创建超管，并在启动日志打印警告——**默认密码是弱口令，首次登录后请立即修改**。密码至少 8 位。
@@ -98,6 +98,8 @@ docker load -i wx-router-amd64.tar
 **看板**：登录后的首页是「看板」，汇总文件统计（总数、绑定域名数、按域名分布）和请求统计（命中率、今日命中/未命中、最近 24 小时趋势）。文件统计来自数据库；请求统计来自内存，服务重启后清零。
 
 **添加校验文件**：从微信后台下载 `.txt` 文件后，直接**拖到新增对话框的虚线框里**，文件名和内容会自动填入，避免手抄出错。
+
+**批量迁移**：规则页「导出」把全部未删除规则打成 JSON 下载；「导入」上传该 JSON，按「域名 + 文件名」与现有规则合并，重复记录可选**跳过或覆盖**（默认跳过），完成后报告导入 / 跳过 / 错误明细。
 
 **提交微信审核前先点「自检」。** 自检分两层：内部检查确认数据本身正确（记录存在、内容非空、当前匹配规则下真的会命中这一条）；外部检查实际发起一次 HTTPS 请求，验证链路是通的。外部检查失败时会明确区分：
 
@@ -136,6 +138,7 @@ docker load -i wx-router-amd64.tar
 - **列表 / 下载 / 删除**：每份备份命名为 `wx_router-YYYYMMDD-HHMMSS.db`，写完先做 `integrity_check` 校验再原子改名，并按「保留份数」自动清理最旧的
 - **每日定时备份**：进程内置定时器（默认关闭；开启后每天 03:17 执行，默认保留 14 份），不依赖外部 cron
 - **恢复**：选一份备份恢复——服务先校验备份完整性，把现有库留底为 `wx_router.db.before-restore`，替换库文件后**自动重启**，期间服务短暂不可用
+- **上传恢复**：把另一台服务器的库文件（或其备份）直接上传——服务校验完整性后同样替换库文件并自动重启，旧库同样留底。迁移时无需登录服务器拷贝文件
 
 备份文件写在 `BACKUP_DIR`（默认 `./backups`；compose 已设为 `/app/data/backups`，即宿主机 `./data/backups`，备份随数据卷持久化）。
 
@@ -151,7 +154,7 @@ node scripts/backup.js --dir ./backups --keep 14
 docker compose exec -T wx_router node scripts/backup.js --dir /app/data/backups --keep 30
 ```
 
-参数也可用环境变量 `BACKUP_DIR` / `KEEP` / `DATA_DIR` 代替（`KEEP` 只对 CLI 脚本生效；界面定时备份的保留份数在「备份」页设置）。脚本只读打开源库，不写运行中的库。配合 crontab 的定时示例：
+参数也可用环境变量 `BACKUP_DIR` / `KEEP` / `DATA_DIR` 代替（`KEEP` 只对 CLI 脚本生效；界面定时备份的保留份数在「设置」页设置）。脚本只读打开源库，不写运行中的库。配合 crontab 的定时示例：
 
 ```cron
 17 3 * * * cd /opt/wx_router && docker compose exec -T wx_router node scripts/backup.js --dir /app/data/backups --keep 30 >> /var/log/wx_router-backup.log 2>&1
@@ -166,6 +169,16 @@ mv data/wx_router.db data/wx_router.db.before-restore # 现有库留底
 cp backups/wx_router-YYYYMMDD-HHMMSS.db data/wx_router.db
 docker compose start
 ```
+
+## 设置
+
+超管登录后的「设置」页集中了可调整的运行参数（原「备份」面板里的定时备份设置也挪到了这里）：
+
+- **定时备份**：启用开关、每日执行时间、保留份数（见上文「备份」）
+- **会话有效期**：1-720 小时（默认 168，即环境变量 `SESSION_TTL_HOURS` 的默认值）。**只影响之后新建立的会话**，当前已登录的设备不受影响
+- **单机登录**：开启后同一账号只保留一个会话——新登录会把该账号在其它设备上的会话全部踢下线；改密码同样适用
+- **自检超时**：规则自检时等待线上返回的最长时间，3-30 秒（默认 8）
+- **请求记录容量**：内存中保留的请求条数，50-5000（默认 200）。改小后立即裁剪，重启仍会清空
 
 ## 超管密码丢失了怎么办
 
@@ -187,7 +200,7 @@ docker compose exec wx_router node scripts/reset-super-password.js <新密码>
 
 ## 排障
 
-微信校验失败时，第一个要回答的问题永远是"请求到底有没有到这台机器"。进「请求记录」面板看最近 200 次 `.txt` 请求：
+微信校验失败时，第一个要回答的问题永远是"请求到底有没有到这台机器"。进「请求记录」面板看最近的 `.txt` 请求（默认保留 200 次，可在「设置」中调整容量；工具栏「清空」可一键清空内存记录）：
 
 - **面板里没有对应记录** → 请求根本没到，去查网关转发规则
 - **有记录但"未命中"** → 请求到了，问题在本服务的数据。看「解析后」那一列是什么域名，和记录里的域名对不对得上
@@ -220,7 +233,7 @@ npm rebuild better-sqlite3
 
 **Docker 不受影响** —— 镜像里的 `npm ci` 是在 `node:22-slim` 内执行的，天然对准生产的 Node 版本。
 
-测试已在 **Node 22.21.1**（与 Dockerfile 同大版本）上全量跑通：16 个测试文件、**268 项全过**。
+测试已在 **Node 22.21.1**（与 Dockerfile 同大版本）上全量跑通：17 个测试文件、**298 项全过**。
 
 前端是原生 HTML/JS，无构建步骤，改完刷新即可。
 
@@ -238,6 +251,7 @@ src/
 ├── requestlog.js    .txt 请求的内存记录（排障、看板共用）
 ├── stats.js         看板统计聚合
 ├── backup.js        备份核心：在线备份、定时调度、恢复（界面与 CLI 共用）
+├── settings.js      统一设置读写：备份 / 会话 / 自检 / 请求记录
 ├── selfcheck.js     两层自检与错误分类
 ├── auth.js          会话中间件与权限守卫
 ├── routes/          HTTP 接口层

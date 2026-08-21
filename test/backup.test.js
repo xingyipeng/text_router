@@ -253,6 +253,7 @@ describe('备份路由', () => {
     ['/api/backups/settings', 'PUT'],
     ['/api/backups', 'POST'],
     ['/api/backups', 'GET'],
+    ['/api/backups/upload', 'POST'],
     ['/api/backups/wx_router-20240101-000000.db/download', 'GET'],
     ['/api/backups/wx_router-20240101-000000.db', 'DELETE'],
     ['/api/backups/wx_router-20240101-000000.db/restore', 'POST'],
@@ -435,5 +436,123 @@ describe('恢复备份', () => {
     expect(res.status).toBe(500);
     expect((await res.json()).error).toContain('恢复失败');
     expect(restartCalled).toBe(false);
+  });
+});
+
+// ==================== 上传恢复（独立实例：replace 会关闭 db） ====================
+
+describe('上传恢复', () => {
+  let dir, dbPath, app, restartCalled, cookie;
+
+  beforeEach(async () => {
+    dir = mkdtempSync(join(tmpdir(), 'wxr-upload-'));
+    dbPath = join(dir, 'test.db');
+    restartCalled = false;
+    const db = openDb(dbPath);
+    app = createApp({
+      db,
+      requestLog: createRequestLog(),
+      config: {
+        dbPath,
+        backupDir: join(dir, 'backups'),
+        restartImpl: () => { restartCalled = true; },
+        sessionTtlHours: 24,
+        cookieSecure: false,
+      },
+    });
+    createUser(db, { username: 'root', password: 'password1234', isSuper: true });
+    cookie = await loginAs(app, 'root', 'password1234');
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  const upload = (bytes, headers = {}) => app.request('/api/backups/upload', {
+    method: 'POST',
+    headers: { host: 'admin.local', ...headers },
+    body: bytes,
+  });
+
+  // 伪造一个合法的 SQLite 库字节流：临时建库 → 写入数据 → close → 读字节
+  function fakeDbBytes() {
+    const tmp = join(dir, `src-${Math.random().toString(36).slice(2)}.db`);
+    const d = new Database(tmp);
+    d.prepare('CREATE TABLE t (v TEXT)').run();
+    d.prepare('INSERT INTO t VALUES (?)').run('from-upload');
+    d.close();
+    return readFileSync(tmp);
+  }
+
+  it('上传合法库 → 磁盘内容生效、留底存在、无 -wal/-shm、触发重启、临时文件清理', async () => {
+    const res = await upload(fakeDbBytes(), { 'content-type': 'application/octet-stream', cookie });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ message: '恢复完成，服务即将重启' });
+    expect(restartCalled).toBe(true);
+
+    expect(existsSync(`${dbPath}.before-restore`)).toBe(true);
+    expect(existsSync(`${dbPath}-wal`)).toBe(false);
+    expect(existsSync(`${dbPath}-shm`)).toBe(false);
+    expect(readdirSync(dir).filter((f) => f.includes('.upload-'))).toEqual([]);
+
+    const chk = new Database(dbPath, { readonly: true });
+    expect(chk.prepare('SELECT v FROM t').get().v).toBe('from-upload');
+    chk.close();
+  });
+
+  it('垃圾字节 → 400、不重启、库保持原样、临时文件清理', async () => {
+    const res = await upload(Buffer.from('this is not a sqlite database'), {
+      'content-type': 'application/octet-stream', cookie,
+    });
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain('完整性');
+    expect(restartCalled).toBe(false);
+    expect(existsSync(`${dbPath}.before-restore`)).toBe(false);
+    expect(readdirSync(dir).filter((f) => f.includes('.upload-'))).toEqual([]);
+    // 原库仍可打开且数据在
+    const chk = new Database(dbPath, { readonly: true });
+    expect(chk.prepare('SELECT username FROM users').all().map((u) => u.username)).toEqual(['root']);
+    chk.close();
+  });
+
+  it('空 body → 400', async () => {
+    const res = await upload(new Uint8Array(0), { 'content-type': 'application/octet-stream', cookie });
+    expect(res.status).toBe(400);
+    expect(restartCalled).toBe(false);
+  });
+
+  it('超过 uploadMaxBytes → 413、不重启', async () => {
+    const dir2 = mkdtempSync(join(tmpdir(), 'wxr-upload2-'));
+    const dbPath2 = join(dir2, 'test.db');
+    let restarted = false;
+    const db2 = openDb(dbPath2);
+    const app2 = createApp({
+      db: db2,
+      requestLog: createRequestLog(),
+      config: {
+        dbPath: dbPath2,
+        backupDir: join(dir2, 'backups'),
+        restartImpl: () => { restarted = true; },
+        uploadMaxBytes: 1024,
+        sessionTtlHours: 24,
+        cookieSecure: false,
+      },
+    });
+    createUser(db2, { username: 'root', password: 'password1234', isSuper: true });
+    const ck = await loginAs(app2, 'root', 'password1234');
+    const big = Buffer.alloc(2048, 1);
+    const res = await app2.request('/api/backups/upload', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/octet-stream',
+        'content-length': String(big.length),
+        host: 'admin.local',
+        cookie: ck,
+      },
+      body: big,
+    });
+    expect(res.status).toBe(413);
+    expect(restarted).toBe(false);
+    try { db2.close(); } catch {}
+    rmSync(dir2, { recursive: true, force: true });
   });
 });

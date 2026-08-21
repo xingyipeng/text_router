@@ -156,7 +156,8 @@ export function startBackupScheduler({ db, dir, state = {}, intervalMs = 60000 }
 }
 
 // —— 恢复 ——
-// 校验备份 → 关闭连接 → 旧库留底 .before-restore → 替换库文件。
+// restoreBackup：校验备份名/存在性/完整性后调用 replaceDbFile。
+// replaceDbFile：关闭连接 → 旧库留底 .before-restore → 用 srcPath 替换库文件，失败尽力回滚。
 // 调用方负责在响应发出后重启进程。db 关闭之后绝不再触碰。
 
 export function restoreBackup({ db, dbPath, dir, name }) {
@@ -170,6 +171,11 @@ export function restoreBackup({ db, dbPath, dir, name }) {
   chk.close();
   if (ok !== 'ok') throw new Error(`备份完整性校验失败：${ok}`);
 
+  return replaceDbFile({ db, dbPath, srcPath: backupPath });
+}
+
+// 把库文件替换为 srcPath 指向的文件（须已通过完整性校验）。返回留底路径。
+export function replaceDbFile({ db, dbPath, srcPath }) {
   db.close();
 
   const beforePath = `${dbPath}.before-restore`;
@@ -181,7 +187,7 @@ export function restoreBackup({ db, dbPath, dir, name }) {
       const side = dbPath + ext;
       if (existsSync(side)) unlinkSync(side);
     }
-    copyFileSync(backupPath, tmpPath);
+    copyFileSync(srcPath, tmpPath);
     renameSync(tmpPath, dbPath);
   } catch (err) {
     // 尽力回滚：把留底放回去

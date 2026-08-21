@@ -25,3 +25,8 @@ export function getSessionUser(db, token) {
 export function deleteSession(db, token) {
   db.prepare('DELETE FROM sessions WHERE token = ?').run(token);
 }
+
+// 单机登录：登录/改密时踢掉该账号的其它所有会话
+export function deleteUserSessions(db, userId) {
+  db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+}

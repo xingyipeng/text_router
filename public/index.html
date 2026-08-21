@@ -92,6 +92,10 @@
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
         <span>备份</span>
       </button>
+      <button class="tab" data-tab="settings" id="tab-settings" hidden title="设置">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        <span>设置</span>
+      </button>
       <button class="tab" data-tab="requests" title="请求记录">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
         <span>请求记录</span>
@@ -204,6 +208,14 @@
           </span>
           <select id="r-by"><option value="">全部操作人</option></select>
           <span class="hint" id="r-count"></span>
+          <a id="btn-rules-export" class="btn" href="/api/rules/export" download title="导出全部规则为 JSON 文件">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>
+            <span>导出</span>
+          </a>
+          <button id="btn-rules-import" class="btn" title="从 JSON 文件批量导入规则">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
+            <span>导入</span>
+          </button>
           <button id="btn-new" class="btn primary">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
             <span>新增规则</span>
@@ -271,17 +283,12 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>
             <span>立即备份</span>
           </button>
+          <button id="btn-backup-upload" class="btn" title="上传数据库文件并恢复（迁移用）">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m17 8-5-5-5 5"/><path d="M12 3v12"/></svg>
+            <span>上传恢复</span>
+          </button>
+          <input type="file" id="backup-upload-input" accept=".db" hidden>
           <span class="hint">在线备份，不中断服务；备份文件存于服务器，可下载或恢复</span>
-        </div>
-
-        <div class="table-card bk-settings-card">
-          <form id="bk-settings-form">
-            <label class="inline"><input type="checkbox" id="bk-enabled"> 启用每日定时备份</label>
-            <label class="inline">时间 <input type="time" id="bk-time" aria-label="备份时间"></label>
-            <label class="inline">保留 <input type="number" id="bk-keep" min="1" max="1000" aria-label="保留份数"> 份</label>
-            <button type="submit" id="btn-save-settings" class="btn">保存设置</button>
-          </form>
-          <p class="hint">定时备份由服务进程内置执行，无需外部 cron；恢复备份后服务会自动重启，期间短暂不可用</p>
         </div>
 
         <div class="table-card">
@@ -298,13 +305,49 @@
         </p>
       </div>
 
+      <div id="panel-settings" class="panel" hidden>
+        <form id="settings-form">
+          <div class="table-card">
+            <h2>定时备份</h2>
+            <label class="row"><input type="checkbox" id="bk-enabled"> 启用每日定时备份</label>
+            <div class="row">
+              <label>时间 <input type="time" id="bk-time" aria-label="备份时间"></label>
+              <label>保留 <input type="number" id="bk-keep" min="1" max="1000" aria-label="保留份数"> 份</label>
+            </div>
+            <p class="hint">定时备份由服务进程内置执行，无需外部 cron；恢复备份后服务会自动重启，期间短暂不可用</p>
+          </div>
+          <div class="table-card">
+            <h2>会话</h2>
+            <label class="row">会话有效期 <input type="number" id="s-ttl" min="1" max="720" aria-label="会话有效期"> 小时</label>
+            <p class="hint">只影响之后新建立的会话，当前登录不受影响</p>
+            <label class="row"><input type="checkbox" id="s-single"> 单机登录（同一账号只保留一个会话）</label>
+            <p class="hint">登录时踢掉该账号在其它设备上的会话</p>
+          </div>
+          <div class="table-card">
+            <h2>规则自检</h2>
+            <label class="row">外部访问超时 <input type="number" id="s-check-timeout" min="3" max="30" aria-label="自检超时"> 秒</label>
+            <p class="hint">规则自检时等待线上返回的最长时间</p>
+          </div>
+          <div class="table-card">
+            <h2>请求记录</h2>
+            <label class="row">容量 <input type="number" id="s-log-capacity" min="50" max="5000" aria-label="请求记录容量"> 条</label>
+            <p class="hint">仅存于内存，重启即清空；改小后立即裁剪</p>
+          </div>
+          <div class="toolbar">
+            <button type="submit" id="btn-save-settings" class="btn primary">保存设置</button>
+            <span class="error" id="settings-error"></span>
+          </div>
+        </form>
+      </div>
+
       <div id="panel-requests" class="panel" hidden>
         <div class="toolbar">
           <button id="btn-refresh-requests" class="btn">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             <span>刷新</span>
           </button>
-          <span class="hint">最近 200 次请求，仅存于内存，重启即清空</span>
+          <button id="btn-clear-requests" class="btn">清空</button>
+          <span class="hint">仅存于内存，重启即清空；容量可在「设置」中调整</span>
         </div>
         <div class="table-card">
           <table id="requests-table">
@@ -388,6 +431,24 @@
     <menu>
       <button value="cancel" type="button" id="user-edit-cancel" class="btn">取消</button>
       <button value="save" type="submit" class="btn primary">保存</button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="rules-import-dialog">
+  <form id="rules-import-form" method="dialog" class="dialog-form">
+    <h2>导入规则</h2>
+    <label>选择导出的 JSON 文件
+      <input type="file" id="rules-import-file" accept=".json,application/json" required>
+    </label>
+    <p class="hint">按「域名 + 文件名」与现有规则合并；文件里与现有规则重复的记录按下面策略处理</p>
+    <label class="inline"><input type="radio" name="import-mode" value="skip" checked> 跳过重复（推荐）</label>
+    <label class="inline"><input type="radio" name="import-mode" value="overwrite"> 覆盖重复</label>
+    <div id="rules-import-result" hidden></div>
+    <p class="error" id="rules-import-error"></p>
+    <menu>
+      <button value="cancel" type="button" id="rules-import-cancel" class="btn">取消</button>
+      <button value="save" type="submit" class="btn primary">开始导入</button>
     </menu>
   </form>
 </dialog>

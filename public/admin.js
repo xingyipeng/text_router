@@ -34,7 +34,7 @@ async function loadUsers() {
       <td>${u.is_super ? '超级管理员' : '普通用户'}</td>
       <td>${u.disabled_at ? '已禁用' : '正常'}</td>
       <td>${fmtTime(u.created_at)}</td>
-      <td>${actions}</td>`;
+      <td class="actions">${actions}</td>`;
     tr.dataset.id = u.id;
     tr.dataset.username = u.username;
     tr.dataset.displayName = u.display_name;
@@ -178,6 +178,23 @@ async function loadRequestLog() {
 }
 
 $('#btn-refresh-requests').addEventListener('click', loadRequestLog);
+
+$('#btn-clear-requests').addEventListener('click', async () => {
+  const ok = await confirmDialog({
+    title: '清空请求记录',
+    message: '将清空当前内存中的全部请求记录，此操作不可撤销。',
+    okText: '清空',
+    danger: true,
+  });
+  if (!ok) return;
+  try {
+    await api('/api/request-log/clear', { method: 'POST' });
+    toast('请求记录已清空');
+    loadRequestLog();
+  } catch (err) {
+    toast(err.message);
+  }
+});
 
 document.addEventListener('tab:show', (e) => {
   if (e.detail === 'users') loadUsers();

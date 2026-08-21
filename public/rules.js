@@ -345,6 +345,62 @@ dz.addEventListener('drop', async (e) => {
   toast(`已读取 ${file.name}`);
 });
 
+// —— 规则 JSON 导入 ——
+// 导出是纯下载链接（index.html 里的 <a href="/api/rules/export" download>），无需 JS。
+
+$('#btn-rules-import').addEventListener('click', () => {
+  $('#rules-import-error').textContent = '';
+  $('#rules-import-result').hidden = true;
+  $('#rules-import-file').value = '';
+  $('#rules-import-dialog').showModal();
+});
+$('#rules-import-cancel').addEventListener('click', () => $('#rules-import-dialog').close());
+
+$('#rules-import-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const file = $('#rules-import-file').files[0];
+  const errEl = $('#rules-import-error');
+  const resultEl = $('#rules-import-result');
+  errEl.textContent = '';
+  resultEl.hidden = true;
+  if (!file) { errEl.textContent = '请先选择 JSON 文件'; return; }
+
+  let data;
+  try {
+    data = JSON.parse(await file.text());
+  } catch {
+    errEl.textContent = '文件不是合法的 JSON';
+    return;
+  }
+  if (!Array.isArray(data?.files)) {
+    errEl.textContent = '不是有效的规则导出文件（缺少 files 数组）';
+    return;
+  }
+
+  const mode = $('#rules-import-form').querySelector('input[name="import-mode"]:checked').value;
+  const submitBtn = e.target.querySelector('button[type="submit"]');
+  submitBtn.disabled = true;
+  submitBtn.classList.add('loading');
+  try {
+    const r = await api('/api/rules/import', { method: 'POST', body: { mode, files: data.files } });
+    let html = `导入 ${r.imported} 条，跳过 ${r.skipped} 条`;
+    if (r.errors.length) {
+      html += `<ul>${r.errors.map((er) =>
+        `<li>${escapeHtml(er.filename || '（无文件名）')}（${escapeHtml(er.host || '全部域名')}）：${escapeHtml(er.reason)}</li>`
+      ).join('')}</ul>`;
+    }
+    resultEl.innerHTML = html;
+    resultEl.hidden = false;
+    loadRules();
+    loadMeta();
+  } catch (err) {
+    errEl.textContent = err.message;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.classList.remove('loading');
+  }
+});
+
 // —— 接入主流程 ——
 
 listeners.onEnterMain.push(loadMeta, loadRules);

@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openDb } from '../src/db.js';
 import { createUser, disableUser } from '../src/repo/users.js';
-import { createSession, getSessionUser, deleteSession } from '../src/repo/sessions.js';
+import { createSession, getSessionUser, deleteSession, deleteUserSessions } from '../src/repo/sessions.js';
 
 let dir, db, user;
 beforeEach(() => {
@@ -65,5 +65,18 @@ describe('deleteSession', () => {
     const token = createSession(db, user.id, 1);
     deleteSession(db, token);
     expect(getSessionUser(db, token)).toBeUndefined();
+  });
+});
+
+describe('deleteUserSessions', () => {
+  it('删除该用户全部会话，其他用户不受影响', () => {
+    const other = createUser(db, { username: 'bob', password: 'password1234' });
+    const t1 = createSession(db, user.id, 1);
+    const t2 = createSession(db, user.id, 1);
+    const t3 = createSession(db, other.id, 1);
+    deleteUserSessions(db, user.id);
+    expect(getSessionUser(db, t1)).toBeUndefined();
+    expect(getSessionUser(db, t2)).toBeUndefined();
+    expect(getSessionUser(db, t3).username).toBe('bob');
   });
 });

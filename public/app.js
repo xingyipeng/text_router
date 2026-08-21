@@ -128,11 +128,13 @@ export function showMain() {
   if (av) av.textContent = (state.me.display_name || state.me.username || '?').trim().charAt(0).toUpperCase();
   $('#tab-users').hidden = !state.me.is_super;
   $('#tab-backups').hidden = !state.me.is_super;
+  $('#tab-settings').hidden = !state.me.is_super;
 }
 
 const TABS = {
   dashboard: '#panel-dashboard', rules: '#panel-rules', trash: '#panel-trash',
-  users: '#panel-users', backups: '#panel-backups', requests: '#panel-requests',
+  users: '#panel-users', backups: '#panel-backups', settings: '#panel-settings',
+  requests: '#panel-requests',
 };
 
 let activeTab = null;
@@ -144,7 +146,7 @@ function tabFromHash() {
 
 function switchTab(name) {
   // 未知标签与非超管访问超管专属页时回落到默认页
-  if (!TABS[name] || ((name === 'users' || name === 'backups') && !state.me?.is_super)) name = 'dashboard';
+  if (!TABS[name] || ((name === 'users' || name === 'backups' || name === 'settings') && !state.me?.is_super)) name = 'dashboard';
   const hash = `#/${name}`;
   if (location.hash !== hash) location.hash = hash; // 会异步触发 hashchange，由下方守卫去重
   if (name === activeTab) return;

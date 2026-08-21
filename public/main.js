@@ -5,6 +5,7 @@ import { boot } from './app.js';
 import './rules.js';
 import './admin.js';
 import './backup.js';
+import './settings.js';
 import './dashboard.js';
 
 boot();

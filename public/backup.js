@@ -7,17 +7,6 @@ function fmtSize(bytes) {
   return `${(bytes / 1024).toFixed(1)} KB`;
 }
 
-async function loadSettings() {
-  try {
-    const s = await api('/api/backups/settings');
-    $('#bk-enabled').checked = s.enabled;
-    $('#bk-time').value = s.time;
-    $('#bk-keep').value = s.keep;
-  } catch (err) {
-    toast(err.message);
-  }
-}
-
 async function loadList() {
   const panel = $('#panel-backups');
   panel.classList.add('loading');
@@ -66,33 +55,6 @@ $('#btn-backup-now').addEventListener('click', async (e) => {
   }
 });
 
-$('#bk-settings-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const btn = $('#btn-save-settings');
-  btn.disabled = true;
-  btn.classList.add('loading');
-  try {
-    const saved = await api('/api/backups/settings', {
-      method: 'PUT',
-      body: {
-        enabled: $('#bk-enabled').checked,
-        time: $('#bk-time').value,
-        keep: Number($('#bk-keep').value),
-      },
-    });
-    // 以服务端校验后的值为准回填
-    $('#bk-enabled').checked = saved.enabled;
-    $('#bk-time').value = saved.time;
-    $('#bk-keep').value = saved.keep;
-    toast(saved.enabled ? `已启用定时备份：每天 ${saved.time}` : '已保存（定时备份保持关闭）');
-  } catch (err) {
-    toast(err.message);
-  } finally {
-    btn.disabled = false;
-    btn.classList.remove('loading');
-  }
-});
-
 $('#backups-table').addEventListener('click', async (e) => {
   const btn = e.target.closest('button[data-act]');
   if (!btn) return;
@@ -126,8 +88,38 @@ $('#backups-table').addEventListener('click', async (e) => {
   }
 });
 
+// —— 上传数据库恢复（迁移用） ——
+// 上传即恢复：服务端校验完整性后替换库文件并自动重启。
+// 文件走裸 fetch——api() 助手只支持 JSON 请求体。
+$('#btn-backup-upload').addEventListener('click', () => $('#backup-upload-input').click());
+
+$('#backup-upload-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const ok = await confirmDialog({
+    title: '上传恢复',
+    message: `将用 ${file.name} 覆盖当前数据库，服务会自动重启，期间短暂不可用。上传前会校验数据库完整性，旧库会留底 .before-restore。`,
+    okText: '恢复',
+    danger: true,
+  });
+  if (!ok) { e.target.value = ''; return; }
+  try {
+    const res = await fetch('/api/backups/upload', {
+      method: 'POST',
+      headers: { 'content-type': 'application/octet-stream' },
+      body: file,
+    });
+    const text = await res.text();
+    const data = text ? JSON.parse(text) : null;
+    if (!res.ok) throw new Error(data?.error || `请求失败（HTTP ${res.status}）`);
+    toast('恢复完成，服务即将重启');
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    e.target.value = '';
+  }
+});
+
 document.addEventListener('tab:show', (e) => {
-  if (e.detail !== 'backups') return;
-  loadSettings();
-  loadList();
+  if (e.detail === 'backups') loadList();
 });

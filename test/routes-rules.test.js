@@ -347,3 +347,124 @@ describe('POST /api/rules/:id/check', () => {
     expect(body.internal.problems.join()).toContain('a.com');
   });
 });
+
+describe('GET /api/rules/export', () => {
+  it('导出 JSON：版本/数量/记录齐全，只含未删除记录', async () => {
+    await api('/api/rules', 'POST', { host: 'a.com', filename: 'a.txt', content: 'va', note: '甲' });
+    await api('/api/rules', 'POST', { host: '', filename: 'g.txt', content: 'vg' });
+    const del = await (await api('/api/rules', 'POST',
+      { host: 'b.com', filename: 'b.txt', content: 'vb' })).json();
+    await api(`/api/rules/${del.id}`, 'DELETE');
+
+    const res = await api('/api/rules/export');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-disposition'))
+      .toMatch(/^attachment; filename="wx_router-rules-\d{14}\.json"$/);
+    const body = await res.json();
+    expect(body.version).toBe(1);
+    expect(body.exported_at).toBeTruthy();
+    expect(body.count).toBe(2);
+    expect(body.files).toEqual(expect.arrayContaining([
+      { host: 'a.com', filename: 'a.txt', content: 'va', note: '甲' },
+      { host: '', filename: 'g.txt', content: 'vg', note: '' },
+    ]));
+  });
+
+  it('未登录 401', async () => {
+    expect((await anon('/api/rules/export')).status).toBe(401);
+  });
+});
+
+describe('POST /api/rules/import', () => {
+  it('mode=skip：新记录导入、冲突跳过并计数', async () => {
+    await api('/api/rules', 'POST', { host: 'a.com', filename: 'a.txt', content: 'old' });
+    const res = await api('/api/rules/import', 'POST', {
+      mode: 'skip',
+      files: [
+        { host: 'a.com', filename: 'a.txt', content: 'new', note: '' },
+        { host: 'b.com', filename: 'b.txt', content: 'vb', note: '' },
+      ],
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ imported: 1, skipped: 1, errors: [] });
+
+    const rowsA = await (await api('/api/rules?host=a.com')).json();
+    expect(rowsA.find((r) => r.filename === 'a.txt').content).toBe('old'); // 未被覆盖
+    const rowsB = await (await api('/api/rules?host=b.com')).json();
+    expect(rowsB.find((r) => r.filename === 'b.txt').content).toBe('vb');
+  });
+
+  it('mode=overwrite：冲突记录被覆盖（内容/备注/修改人更新）', async () => {
+    const created = await (await api('/api/rules', 'POST',
+      { host: 'a.com', filename: 'a.txt', content: 'old', note: '旧备注' })).json();
+    const res = await api('/api/rules/import', 'POST', {
+      mode: 'overwrite',
+      files: [{ host: 'a.com', filename: 'a.txt', content: 'new', note: '新备注' }],
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ imported: 1, skipped: 0, errors: [] });
+
+    const rows = await (await api('/api/rules')).json();
+    const a = rows.find((r) => r.id === created.id);
+    expect(a.content).toBe('new');
+    expect(a.note).toBe('新备注');
+    expect(a.updated_by_username).toBe('alice');
+  });
+
+  it('校验失败的记录进 errors（含 host/filename/reason），其余正常导入', async () => {
+    const res = await api('/api/rules/import', 'POST', {
+      mode: 'skip',
+      files: [
+        { host: 'a.com', filename: 'bad.php', content: 'x' }, // 非法文件名
+        { host: 'a.com', filename: 'ok.txt', content: 'ok' },
+        { filename: 'no-content.txt' }, // 缺 content
+      ],
+    });
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.imported).toBe(1);
+    expect(body.skipped).toBe(0);
+    expect(body.errors).toHaveLength(2);
+    expect(body.errors[0]).toMatchObject({
+      host: 'a.com', filename: 'bad.php', reason: expect.stringContaining('文件名'),
+    });
+    expect(body.errors[1].reason).toContain('内容');
+
+    const rows = await (await api('/api/rules?host=a.com')).json();
+    expect(rows.find((r) => r.filename === 'ok.txt')).toBeTruthy();
+  });
+
+  it('同一批内重复 key：先创建后命中，按策略处理不报错', async () => {
+    const res = await api('/api/rules/import', 'POST', {
+      mode: 'overwrite',
+      files: [
+        { host: 'a.com', filename: 'dup.txt', content: 'first' },
+        { host: 'a.com', filename: 'dup.txt', content: 'second' },
+      ],
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ imported: 2, skipped: 0, errors: [] });
+    const rows = await (await api('/api/rules?host=a.com')).json();
+    const dups = rows.filter((r) => r.filename === 'dup.txt');
+    expect(dups).toHaveLength(1);
+    expect(dups[0].content).toBe('second');
+  });
+
+  it('超 5000 条 400', async () => {
+    const files = Array.from({ length: 5001 }, (_, i) => ({
+      host: 'a.com', filename: `f${i}.txt`, content: 'v',
+    }));
+    const res = await api('/api/rules/import', 'POST', { mode: 'skip', files });
+    expect(res.status).toBe(400);
+  });
+
+  it('坏 mode / files 非数组或空 → 400', async () => {
+    expect((await api('/api/rules/import', 'POST', { mode: 'merge', files: [] })).status).toBe(400);
+    expect((await api('/api/rules/import', 'POST', { mode: 'skip', files: 'x' })).status).toBe(400);
+    expect((await api('/api/rules/import', 'POST', { mode: 'skip', files: [] })).status).toBe(400);
+  });
+
+  it('未登录 401', async () => {
+    expect((await anon('/api/rules/import', 'POST', { mode: 'skip', files: [] })).status).toBe(401);
+  });
+});

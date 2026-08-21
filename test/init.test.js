@@ -150,3 +150,41 @@ describe('GET /api/request-log', () => {
     expect(rows[0].hit).toBe(false);
   });
 });
+
+describe('POST /api/request-log/clear', () => {
+  it('未登录返回 401', async () => {
+    const app = createApp({
+      db, requestLog: createRequestLog(),
+      config: { sessionTtlHours: 24, cookieSecure: false },
+    });
+    expect((await app.request('/api/request-log/clear', {
+      method: 'POST', headers: { host: 'admin.local' },
+    })).status).toBe(401);
+  });
+
+  it('清空后列表为空', async () => {
+    const requestLog = createRequestLog();
+    const app = createApp({
+      db, requestLog,
+      config: { sessionTtlHours: 24, cookieSecure: false },
+    });
+    createUser(db, { username: 'alice', password: 'password1234' });
+    const login = await app.request('/api/auth/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', host: 'admin.local' },
+      body: JSON.stringify({ username: 'alice', password: 'password1234' }),
+    });
+    const cookie = (login.headers.get('set-cookie') || '').split(';')[0];
+
+    await app.request('/first.txt', { headers: { host: 'a.com' } });
+    expect(await (await app.request('/api/request-log',
+      { headers: { host: 'admin.local', cookie } })).json()).toHaveLength(1);
+
+    const res = await app.request('/api/request-log/clear', {
+      method: 'POST', headers: { host: 'admin.local', cookie },
+    });
+    expect(res.status).toBe(200);
+    expect(await (await app.request('/api/request-log',
+      { headers: { host: 'admin.local', cookie } })).json()).toHaveLength(0);
+  });
+});

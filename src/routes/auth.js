@@ -1,9 +1,20 @@
 import { Hono } from 'hono';
 import { findActiveByUsername, setPassword } from '../repo/users.js';
-import { createSession, deleteSession } from '../repo/sessions.js';
+import { createSession, deleteSession, deleteUserSessions } from '../repo/sessions.js';
 import { verifyPassword } from '../password.js';
 import { MIN_PASSWORD_LENGTH } from '../validate.js';
 import { requireAuth, issueSessionCookie, COOKIE_NAME } from '../auth.js';
+import { getSettings } from '../settings.js';
+
+// 登录/改密都发新会话：TTL 取设置值（无记录回落 config.sessionTtlHours），
+// 开启单机登录时先踢掉该账号的其它会话，再发新会话 cookie。
+function openSession(c, db, config, userId) {
+  const settings = getSettings(db, { sessionTtlHours: config.sessionTtlHours });
+  if (settings.session.single_session) deleteUserSessions(db, userId);
+  const token = createSession(db, userId, settings.session.ttl_hours);
+  issueSessionCookie(c, token, { ...config, sessionTtlHours: settings.session.ttl_hours });
+  return token;
+}
 
 export function createAuthRoutes({ db, config }) {
   const router = new Hono();
@@ -17,8 +28,7 @@ export function createAuthRoutes({ db, config }) {
     const ok = row && typeof password === 'string' && verifyPassword(password, row.password_hash);
     if (!ok) return c.json({ error: '用户名或密码不正确' }, 401);
 
-    const token = createSession(db, row.id, config.sessionTtlHours);
-    issueSessionCookie(c, token, config);
+    openSession(c, db, config, row.id);
     return c.json({
       id: row.id,
       username: row.username,
@@ -51,8 +61,7 @@ export function createAuthRoutes({ db, config }) {
     }
 
     setPassword(db, user.id, new_password);
-    const token = createSession(db, user.id, config.sessionTtlHours);
-    issueSessionCookie(c, token, config);
+    openSession(c, db, config, user.id);
     return c.json({ ok: true });
   });
 
