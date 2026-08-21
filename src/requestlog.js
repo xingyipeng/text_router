@@ -1,4 +1,4 @@
-export const DEFAULT_CAPACITY = 200;
+export const DEFAULT_CAPACITY = 2000;
 
 export function createRequestLog(capacity = DEFAULT_CAPACITY) {
   let current = capacity;

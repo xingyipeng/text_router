@@ -22,6 +22,9 @@ export function createApp({ db, requestLog, config }) {
   });
 
   app.use('/api/*', sessionMiddleware({ db }));
+
+  // 版本信息：公开接口（无需登录），供前端展示版本号与 console 横幅
+  app.get('/api/version', (c) => c.json({ version: config.version ?? 'dev' }));
   app.route('/api/auth', createAuthRoutes({ db, config }));
   app.route('/api/rules', createRulesRoutes({ db, fetchImpl: config.fetchImpl }));
   app.route('/api/users', createUserRoutes({ db }));

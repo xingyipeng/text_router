@@ -50,9 +50,9 @@ const as = (cookie) => (path, method = 'GET', body) =>
 describe('getSettings / setSettings（单元）', () => {
   it('TTL 回落链：存储值 → config.sessionTtlHours → 默认 168', () => {
     expect(getSettings(db).session.ttl_hours).toBe(168);
-    expect(getSettings(db, { sessionTtlHours: 24 }).session.ttl_hours).toBe(24);
+    expect(getSettings(db, { session: { ttl_hours: 24 } }).session.ttl_hours).toBe(24);
     setSettings(db, { session: { ttl_hours: 720 } });
-    expect(getSettings(db, { sessionTtlHours: 24 }).session.ttl_hours).toBe(720);
+    expect(getSettings(db, { session: { ttl_hours: 24 } }).session.ttl_hours).toBe(720);
   });
 
   it('存储值非法时回落默认值', () => {
@@ -64,6 +64,41 @@ describe('getSettings / setSettings（单元）', () => {
     setSettings(db, { session: { single_session: true } });
     expect(getSettings(db).session.single_session).toBe(true);
     expect(db.prepare(`SELECT value FROM settings WHERE key = 'session_single'`).get().value).toBe('1');
+  });
+
+  it('env 预设：DB 无记录时作为初始默认值生效', () => {
+    const s = getSettings(db, {
+      requestlog: { capacity: '500' },
+      selfcheck: { timeout_seconds: '15' },
+      backup: { enabled: true, time: '01:30', keep: '14' },
+    });
+    expect(s.requestlog).toEqual({ capacity: 500 });
+    expect(s.selfcheck).toEqual({ timeout_seconds: 15 });
+    expect(s.backup).toEqual({ enabled: true, time: '01:30', keep: 14 });
+  });
+
+  it('env 预设非法时回落代码默认（与 DB 值非法同语义）', () => {
+    const s = getSettings(db, {
+      requestlog: { capacity: 'abc' }, // 非数字
+      selfcheck: { timeout_seconds: '99' }, // 超范围
+      backup: { enabled: true, time: '99:99', keep: 'xyz' },
+    });
+    expect(s.requestlog).toEqual({ capacity: 2000 });
+    expect(s.selfcheck).toEqual({ timeout_seconds: 8 });
+    expect(s.backup).toEqual({ enabled: true, time: '23:00', keep: 7 }); // enabled 无范围限制，其余回落
+  });
+
+  it('env 预设边界：最小值/最大值通过，越界回落', () => {
+    expect(getSettings(db, { requestlog: { capacity: '50' } }).requestlog.capacity).toBe(50);
+    expect(getSettings(db, { requestlog: { capacity: '5000' } }).requestlog.capacity).toBe(5000);
+    expect(getSettings(db, { requestlog: { capacity: '49' } }).requestlog.capacity).toBe(2000);
+    expect(getSettings(db, { requestlog: { capacity: '5001' } }).requestlog.capacity).toBe(2000);
+  });
+
+  it('优先级：DB 已存值 > env 预设', () => {
+    setSettings(db, { requestlog: { capacity: 300 } });
+    const s = getSettings(db, { requestlog: { capacity: '500' } });
+    expect(s.requestlog.capacity).toBe(300);
   });
 });
 
@@ -82,7 +117,7 @@ describe('GET /api/settings', () => {
       backup: { enabled: false, time: '23:00', keep: 7 },
       session: { ttl_hours: 24, single_session: false },
       selfcheck: { timeout_seconds: 8 },
-      requestlog: { capacity: 200 },
+      requestlog: { capacity: 2000 },
     });
   });
 });
@@ -97,7 +132,7 @@ describe('PUT /api/settings', () => {
     expect(saved.session).toEqual({ ttl_hours: 720, single_session: true });
     expect(saved.backup).toEqual({ enabled: false, time: '23:00', keep: 7 });
     expect(saved.selfcheck).toEqual({ timeout_seconds: 8 });
-    expect(saved.requestlog).toEqual({ capacity: 200 });
+    expect(saved.requestlog).toEqual({ capacity: 2000 });
 
     const back = await (await as(superCookie)('/api/settings')).json();
     expect(back.session).toEqual({ ttl_hours: 720, single_session: true });
@@ -141,7 +176,7 @@ describe('PUT /api/settings', () => {
     expect(res.status).toBe(400);
     const back = await (await as(superCookie)('/api/settings')).json();
     expect(back.session.ttl_hours).toBe(24);
-    expect(back.requestlog.capacity).toBe(200);
+    expect(back.requestlog.capacity).toBe(2000);
   });
 
   it('请求记录容量改后立即生效（裁剪内存记录）', async () => {

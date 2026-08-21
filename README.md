@@ -91,8 +91,13 @@ crpi-1z575ueyebmvfwqg.cn-shanghai.personal.cr.aliyuncs.com/yujianpengpeng/text_r
 | `TZ` | `Asia/Shanghai` | 容器时区（定时备份按此时钟执行；compose 已默认） |
 | `COOKIE_SECURE` | `false` | 部署在 HTTPS 后设为 `true` |
 | `DOCS_DIR` | `./docs` | 帮助面板文档目录 |
+| `REQUESTLOG_CAPACITY` | `2000` | 请求记录容量初始值（50-5000） |
+| `SELFCHECK_TIMEOUT_SECONDS` | `8` | 规则自检超时初始值（3-30） |
+| `BACKUP_ENABLED` | `false` | 定时备份开关初始值 |
+| `BACKUP_TIME` | `23:00` | 备份时间初始值 |
+| `BACKUP_KEEP` | `7` | 备份保留份数初始值 |
 
-数据库非空时 `SUPER_ADMIN_*` 被忽略。默认密码 `admin123` 是弱口令，首次登录后请立即修改。
+数据库非空时 `SUPER_ADMIN_*` 被忽略；`REQUESTLOG_CAPACITY` 等运行级设置仅在**数据库无记录**时作为初始值，之后在管理界面「设置」页修改、以数据库为准。默认密码 `admin123` 是弱口令，首次登录后请立即修改。裸机部署自动加载根目录 `.env`（示例见 `.env.example`），Docker 由 compose 注入环境变量。
 
 ## 使用要点
 

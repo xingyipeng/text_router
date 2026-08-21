@@ -175,6 +175,21 @@ describe('备份设置', () => {
     expect(saved).toEqual({ enabled: true, time: '23:59', keep: 5 });
     expect(getBackupSettings(db)).toEqual({ enabled: true, time: '23:59', keep: 5 });
   });
+
+  it('env 预设：DB 无记录时作为初始默认值', () => {
+    expect(getBackupSettings(db, { enabled: true, time: '01:30', keep: '14' }))
+      .toEqual({ enabled: true, time: '01:30', keep: 14 });
+    // 显式 false 也生效
+    expect(getBackupSettings(db, { enabled: false })).toEqual({ enabled: false, time: '23:00', keep: 7 });
+  });
+
+  it('env 预设非法字段回落代码默认；DB 已存值优先', () => {
+    expect(getBackupSettings(db, { enabled: true, time: '99:99', keep: 'xyz' }))
+      .toEqual({ enabled: true, time: '23:00', keep: 7 });
+    setBackupSettings(db, { enabled: false, time: '02:00', keep: 3 });
+    expect(getBackupSettings(db, { enabled: true, time: '01:30', keep: '14' }))
+      .toEqual({ enabled: false, time: '02:00', keep: 3 });
+  });
 });
 
 describe('maybeRunScheduledBackup', () => {
@@ -219,6 +234,15 @@ describe('maybeRunScheduledBackup', () => {
       { db, dir: join(dir, 'bk'), state }, new Date(2026, 0, 1, 3, 18));
     expect(r.ran).toBe(false);
     expect(existsSync(join(dir, 'bk'))).toBe(false);
+  });
+
+  it('env 预设开启定时备份时，DB 无记录也会执行', async () => {
+    const bk = join(dir, 'bk');
+    const r = await maybeRunScheduledBackup(
+      { db, dir: bk, state: {}, backupDefaults: { enabled: true, time: '03:17', keep: 14 } },
+      new Date(2026, 0, 1, 3, 17));
+    expect(r.ran).toBe(true);
+    expect(existsSync(join(bk, r.filename))).toBe(true);
   });
 });
 

@@ -9,7 +9,7 @@ import { getSettings } from '../settings.js';
 // 登录/改密都发新会话：TTL 取设置值（无记录回落 config.sessionTtlHours），
 // 开启单机登录时先踢掉该账号的其它会话，再发新会话 cookie。
 function openSession(c, db, config, userId) {
-  const settings = getSettings(db, { sessionTtlHours: config.sessionTtlHours });
+  const settings = getSettings(db, { session: { ttl_hours: config.sessionTtlHours } });
   if (settings.session.single_session) deleteUserSessions(db, userId);
   const token = createSession(db, userId, settings.session.ttl_hours);
   issueSessionCookie(c, token, { ...config, sessionTtlHours: settings.session.ttl_hours });

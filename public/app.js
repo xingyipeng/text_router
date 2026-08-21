@@ -158,7 +158,7 @@ function switchTab(name) {
   // 页头标题跟随当前标签（纯展示）
   const titleBtn = $$('.tab').find((b) => b.dataset.tab === name);
   const titleEl = $('#page-title');
-  if (titleBtn && titleEl) titleEl.textContent = titleBtn.textContent.trim();
+  if (titleBtn && titleEl) titleEl.textContent = titleBtn.textContent.trim() || titleBtn.getAttribute('title') || '';
   document.dispatchEvent(new CustomEvent('tab:show', { detail: name }));
 }
 
@@ -206,6 +206,10 @@ $('#password-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const form = new FormData(e.target);
   $('#password-error').textContent = '';
+  if (form.get('new_password') !== form.get('new_password2')) {
+    $('#password-error').textContent = '两次输入的新密码不一致';
+    return;
+  }
   try {
     await api('/api/auth/password', {
       method: 'POST',
@@ -245,8 +249,29 @@ window.addEventListener('hashchange', () => switchTab(tabFromHash()));
   apply(saved);
 }
 
+// —— 版本展示：侧边栏品牌下方 + 浏览器 console 友好横幅 ——
+// /api/version 是公开接口，登录与否都能拿到；失败时静默跳过，不影响页面
+async function loadVersion() {
+  let version;
+  try {
+    ({ version } = await api('/api/version'));
+  } catch {
+    return;
+  }
+  const el = $('#version-label');
+  if (el) el.textContent = `v${version}`;
+  console.log(
+    '%c TextRoute %cv' + version +
+    '\n%c自托管的微信校验文件 · 文本路由服务\nGitee: https://gitee.com/moolan_user/text_router\nGitHub: https://github.com/xingyipeng/text_router',
+    'background:#1a73e8;color:#fff;font-size:14px;font-weight:700;padding:4px 10px;border-radius:6px 0 0 6px;',
+    'background:#e8f0fe;color:#1a73e8;font-size:14px;font-weight:700;padding:4px 10px;border-radius:0 6px 6px 0;',
+    'color:#8a94a6;font-size:12px;line-height:1.7;'
+  );
+}
+
 // 由 main.js 在所有模块注册完监听器之后调用，顺序不能提前
 export async function boot() {
+  loadVersion(); // 不阻塞登录流程
   try {
     state.me = await api('/api/auth/me');
     enterMain();

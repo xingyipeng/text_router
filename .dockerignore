@@ -2,6 +2,7 @@ node_modules
 data
 .git
 .gitignore
+**/.DS_Store
 docs/superpowers
 docs/screenshots
 test

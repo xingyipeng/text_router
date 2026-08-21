@@ -29,10 +29,10 @@ describe('createRequestLog', () => {
     expect(paths).toEqual(['/5.txt', '/4.txt', '/3.txt']);
   });
 
-  it('默认容量 200', () => {
+  it('默认容量 2000', () => {
     const d = createRequestLog();
-    for (let i = 0; i < 250; i++) d.record({ path: `/${i}.txt` });
-    expect(d.list()).toHaveLength(200);
+    for (let i = 0; i < 2050; i++) d.record({ path: `/${i}.txt` });
+    expect(d.list()).toHaveLength(2000);
   });
 
   it('list 返回副本，外部改动不影响内部', () => {

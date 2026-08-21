@@ -4,6 +4,7 @@ import {
   existsSync, copyFileSync,
 } from 'node:fs';
 import { join, basename } from 'node:path';
+import { SETTINGS } from './config.js';
 
 // 备份管理核心：CLI（scripts/backup.js）与 HTTP 路由共用。
 // 备份用 better-sqlite3 在线备份 API，运行中的服务无需停机、快照一致。
@@ -89,36 +90,43 @@ export function deleteBackup(dir, name) {
 }
 
 // —— 定时备份设置（存 settings 表）——
+// 字段规格（dbKey/default/range/pattern）来自 config.js 的 SETTINGS.backup
 
-const DEFAULT_SETTINGS = { enabled: false, time: '23:00', keep: 7 };
+const B = SETTINGS.backup;
 
-export function getBackupSettings(db) {
+export function getBackupSettings(db, defaults = {}) {
   const rows = db.prepare(`SELECT key, value FROM settings WHERE key LIKE 'backup_%'`).all();
   const map = Object.fromEntries(rows.map((r) => [r.key, r.value]));
+  // 优先级：DB 有效值 > env 预设的初始默认值 > 代码默认
   return {
-    enabled: map.backup_enabled === '1',
-    time: /^([01]\d|2[0-3]):[0-5]\d$/.test(map.backup_time || '') ? map.backup_time : DEFAULT_SETTINGS.time,
-    keep: Number.isInteger(Number(map.backup_keep)) && Number(map.backup_keep) >= 1
-      ? Number(map.backup_keep) : DEFAULT_SETTINGS.keep,
+    enabled: map[B.enabled.dbKey] === '1' ? true
+      : map[B.enabled.dbKey] === '0' ? false
+      : (defaults.enabled ?? B.enabled.default),
+    time: B.time.pattern.test(map[B.time.dbKey] || '') ? map[B.time.dbKey]
+      : B.time.pattern.test(defaults.time || '') ? defaults.time
+      : B.time.default,
+    keep: Number.isInteger(Number(map[B.keep.dbKey])) && Number(map[B.keep.dbKey]) >= 1 ? Number(map[B.keep.dbKey])
+      : Number.isInteger(Number(defaults.keep)) && Number(defaults.keep) >= 1 ? Number(defaults.keep)
+      : B.keep.default,
   };
 }
 
 export function setBackupSettings(db, { enabled, time, keep }) {
   if (typeof enabled !== 'boolean') throw new Error('enabled 必须是布尔值');
-  if (typeof time !== 'string' || !/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+  if (typeof time !== 'string' || !B.time.pattern.test(time)) {
     throw new Error('time 必须是 HH:MM 格式');
   }
-  if (!Number.isInteger(keep) || keep < 1 || keep > 1000) {
-    throw new Error('keep 必须是 1-1000 的整数');
+  if (!Number.isInteger(keep) || keep < B.keep.range[0] || keep > B.keep.range[1]) {
+    throw new Error(`keep 必须是 ${B.keep.range[0]}-${B.keep.range[1]} 的整数`);
   }
   const upsert = db.prepare(`
     INSERT INTO settings (key, value) VALUES (?, ?)
     ON CONFLICT(key) DO UPDATE SET value = excluded.value
   `);
   db.transaction(() => {
-    upsert.run('backup_enabled', enabled ? '1' : '0');
-    upsert.run('backup_time', time);
-    upsert.run('backup_keep', String(keep));
+    upsert.run(B.enabled.dbKey, enabled ? '1' : '0');
+    upsert.run(B.time.dbKey, time);
+    upsert.run(B.keep.dbKey, String(keep));
   })();
   return { enabled, time, keep };
 }
@@ -126,8 +134,8 @@ export function setBackupSettings(db, { enabled, time, keep }) {
 // —— 定时备份调度 ——
 // state.lastRunMinute 在内存中：同一分钟只跑一次，防止 60s tick 与慢备份叠加重复执行。
 
-export async function maybeRunScheduledBackup({ db, dir, state }, now = new Date()) {
-  const settings = getBackupSettings(db);
+export async function maybeRunScheduledBackup({ db, dir, state, backupDefaults }, now = new Date()) {
+  const settings = getBackupSettings(db, backupDefaults);
   if (!settings.enabled) return { ran: false };
 
   const p = (x) => String(x).padStart(2, '0');
@@ -146,9 +154,9 @@ export async function maybeRunScheduledBackup({ db, dir, state }, now = new Date
 }
 
 // 返回 stop 函数。启动时先检查一次，提高恰好落在设定分钟内的命中率。
-export function startBackupScheduler({ db, dir, state = {}, intervalMs = 60000 }) {
+export function startBackupScheduler({ db, dir, state = {}, intervalMs = 60000, backupDefaults }) {
   const tick = async () => {
-    const r = await maybeRunScheduledBackup({ db, dir, state });
+    const r = await maybeRunScheduledBackup({ db, dir, state, backupDefaults });
     if (r.ran) console.log(`[backup] 定时备份完成：${r.filename}（${r.sizeKb} KB）`);
   };
   tick();

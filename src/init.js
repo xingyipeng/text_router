@@ -1,9 +1,7 @@
 import { countUsers, createUser } from './repo/users.js';
 import { MIN_PASSWORD_LENGTH } from './validate.js';
 import { hashPassword } from './password.js';
-
-export const DEFAULT_SUPER_USER = 'admin';
-export const DEFAULT_SUPER_PASSWORD = 'admin123';
+import { DEFAULT_SUPER_USER, DEFAULT_SUPER_PASSWORD } from './config.js';
 
 export function ensureSuperAdmin(db, { username, password } = {}) {
   if (countUsers(db) > 0) return { created: false };

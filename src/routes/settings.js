@@ -6,7 +6,7 @@ export function createSettingsRoutes({ db, requestLog, config }) {
   const router = new Hono();
   router.use('*', requireSuper);
 
-  const read = () => getSettings(db, { sessionTtlHours: config.sessionTtlHours });
+  const read = () => getSettings(db, { ...config.defaults, session: { ttl_hours: config.sessionTtlHours } });
 
   router.get('/', (c) => c.json(read()));
 
