@@ -330,6 +330,24 @@ label.inline input[type="number"] { border: none; padding: 4px 8px; }
 }
 .topbar h1 { font-size: 17px; font-weight: 600; color: #15233a; letter-spacing: .3px; }
 
+.top-actions { display: flex; align-items: center; gap: 14px; }
+.top-links { display: flex; align-items: center; gap: 10px; }
+.top-links .icon-btn {
+  width: 34px; height: 34px; border-radius: 50%;
+  display: grid; place-items: center;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text-2);
+  transition: color .16s ease, border-color .16s ease, transform .16s ease, box-shadow .16s ease;
+}
+.top-links .icon-btn:hover {
+  color: var(--primary);
+  border-color: var(--primary);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
+}
+.top-links .icon-btn svg { width: 17px; height: 17px; }
+
 main { padding: 24px 28px 56px; max-width: 1500px; width: 100%; margin: 0 auto; }
 .panel { animation: panelIn .28s ease; }
 
