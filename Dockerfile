@@ -14,8 +14,9 @@ COPY src ./src
 COPY public ./public
 COPY docs ./docs
 COPY scripts ./scripts
-RUN mkdir -p /app/data && chown -R node:node /app
+# 以 root 运行：宿主机 bind mount 的数据目录常由 Docker 以 root 创建，
+# 非 root 用户无写权限会报 SQLITE_CANTOPEN，root 运行则开箱即用（自托管工具常见做法）
+RUN mkdir -p /app/data
 ENV NODE_ENV=production PORT=3000 DATA_DIR=/app/data
 EXPOSE 3000
-USER node
 CMD ["node", "src/server.js"]
