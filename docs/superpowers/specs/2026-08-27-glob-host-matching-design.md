@@ -44,7 +44,7 @@
 priority 数字大者 > 同优先级具体度高者（精确 > `*` 模式 > `**` 模式 > 全局） > 同优先级同具体度先建者（id 小）
 ```
 
-- `priority` 是新字段：**整数，默认 0，越大越优先**，允许负值（降级），范围 -999~999。
+- `priority` 是新字段：**整数，默认 0，越大越优先**，范围 0~1000。
 - 全部用默认值时行为与现状一致（精确 > 全局），零惊讶。
 - 想要例外时手动调数字，例如让 `*` 全局记录（priority 10）压过某条精确规则（priority 0）。
 
@@ -103,7 +103,7 @@ UPDATE verify_files SET host = '*' WHERE host = '';  -- 存量全局记录一次
 | `compareRules(a, b)` | §3.2 排序比较器（priority → 具体度 → id） |
 | `isPattern(host)` | 是否含 `*`（决定自检/统计口径） |
 | `normalizePattern(raw)` | §3.4 校验 + 归一化，返回 `{ ok, value }` 或 `{ ok, error }` |
-| `isValidPriority(v)` | -999~999 整数 |
+| `isValidPriority(v)` | 0~1000 整数 |
 
 ### 5.2 `src/repo/rules.js`
 
@@ -141,6 +141,7 @@ UPDATE verify_files SET host = '*' WHERE host = '';  -- 存量全局记录一次
 ### 6.1 规则对话框（`public/index.html` + `public/rules.js`）
 
 - 域名输入框提示改为「精确域名或通配模式：`*` 单层、`**` 任意层，如 `*.example.com`、`**.example.com`；单独 `*` 表示所有域名」。
+- 域名输入框旁增加「?」帮助链接：点击切换到帮助面板并打开「规则配置说明」文档（见 §12）。
 - 新增「优先级」数字输入框，默认 0，提示「数字越大越优先，冲突时才需要改」。
 - **提交前前端校验**（§7 双重验证）：同一套规则在 `public/rules.js` 写轻量副本（项目无构建、前后端不共享模块），错误显示在 `#rule-error`，不发请求；host 留空时提示「将保存为全局 *」。
 
@@ -206,3 +207,12 @@ UPDATE verify_files SET host = '*' WHERE host = '';  -- 存量全局记录一次
 
 - `test/batchcheck.test.js`（新增）：任务创建/轮询状态流转、完成后结果完整、筛选参数解析、超限 400、过期清理、并发上限（fetchImpl stub 计数）。
 - `test/routes-rules.test.js`（更新）：批量自检路由用例（fetchImpl stub 注入）。
+
+## 12. 帮助文档与入口
+
+- 新增顶层帮助文档 `docs/规则配置.md`（帮助面板自动渲染 docs/ 下 .md，无需注册）：
+  - host 匹配语法：精确域名、`*`（单层）、`**`（任意层含 0 层）、全局 `*`，各配例子
+  - 优先级：排序次序（priority → 具体度 → 先建）、默认 0、范围 0~1000
+  - 保存校验规则与常见错误示例
+  - 单条自检与批量自检用法、结果代码含义（对齐 `CHECK_HINTS`）
+- `public/help.js` 增加 `openHelpDoc(id)`：切换到帮助面板、定位并打开指定文档；规则对话框的「?」链接调用它。
