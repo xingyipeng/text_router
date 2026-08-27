@@ -1,5 +1,6 @@
 import { isValidFilename } from './validate.js';
 import { matchFile } from './repo/rules.js';
+import { isPattern, patternIntersects, compareRules } from './hostmatch.js';
 
 export const CHECK_CODES = {
   OK: 'OK',
@@ -26,18 +27,23 @@ export function runInternalCheck(db, file, probeHost) {
   if (!isValidFilename(file.filename)) problems.push('文件名不合法');
   if (typeof file.content !== 'string' || file.content.length === 0) problems.push('内容为空');
 
-  const host = probeHost !== undefined ? probeHost : file.host;
-  if (host === '' && probeHost === undefined) {
-    // 全局记录：任一域名上有同名的精确记录，都会遮蔽它
-    const shadowers = db.prepare(`
-      SELECT id, host FROM verify_files
-      WHERE filename = ? AND host != '' AND deleted_at IS NULL
-    `).all(file.filename);
-    for (const s of shadowers) {
-      problems.push(`在域名 ${s.host} 上命中的不是这条记录，而是 id=${s.id}（更精确的 host 优先）`);
+  const pattern = file.host === '' ? '*' : file.host;
+  const probe = probeHost !== undefined ? probeHost : (isPattern(pattern) ? undefined : pattern);
+  if (probe === undefined) {
+    // 模式/全局记录：与线上匹配同源——扫描同 filename 的活跃行，
+    // 模式相交且排序赢过它的行会在部分域名上遮蔽这条
+    const others = db.prepare(`
+      SELECT id, host, priority FROM verify_files
+      WHERE filename = ? AND deleted_at IS NULL AND id != ?
+    `).all(file.filename, file.id);
+    for (const o of others) {
+      const oHost = o.host === '' ? '*' : o.host;
+      if (patternIntersects(oHost, pattern) && compareRules({ ...o, host: oHost }, { ...file, host: pattern }) < 0) {
+        problems.push(`在部分域名上命中的不是这条记录，而是 id=${o.id}（host=${o.host} 优先）`);
+      }
     }
   } else {
-    const matched = matchFile(db, host, file.filename);
+    const matched = matchFile(db, probe, file.filename);
     if (!matched) {
       problems.push('按当前匹配规则查不到任何记录');
     } else if (matched.id !== file.id) {
@@ -57,10 +63,10 @@ function classifyFetchError(err) {
 }
 
 export async function runExternalCheck(file, { fetchImpl = fetch, timeoutMs = 8000 } = {}) {
-  if (!file.host) {
+  if (!file.host || isPattern(file.host)) {
     return {
       code: CHECK_CODES.NO_HOST,
-      detail: '这是一条全局记录（未绑定域名），无法确定该向哪个域名发起验证。请在浏览器中手动访问目标 URL 确认。',
+      detail: '模式规则无法确定验证域名，请手动访问目标 URL 确认。',
     };
   }
 
