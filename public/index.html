@@ -263,6 +263,13 @@
       </div>
 
       <div id="panel-trash" class="panel" hidden>
+        <div class="toolbar">
+          <span class="hint" id="trash-count"></span>
+          <button id="btn-trash-clear" class="btn danger" title="彻底删除回收站中全部记录，不可恢复">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 5h19M8 5V3h8v2M5 5l1 16h12l1-16"/></svg>
+            <span>清空回收站</span>
+          </button>
+        </div>
         <div class="table-card">
           <table id="trash-table">
             <thead><tr>

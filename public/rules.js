@@ -213,15 +213,18 @@ async function loadTrash() {
     tr.className = 'deleted';
     tr.style.setProperty('--i', i); // 行入场错峰（纯展示）
     tr.innerHTML = `
-      <td class="mono">${r.host ? escapeHtml(r.host) : '<em>全部域名</em>'}</td>
+      <td class="mono">${r.host === '*' ? '所有域名' : escapeHtml(r.host)}</td>
       <td class="mono">${escapeHtml(r.filename)}</td>
       <td>${escapeHtml(r.note)}</td>
       <td>${escapeHtml(personLabel(r.deleted_by_username, r.deleted_by_name))}</td>
       <td>${fmtTime(r.deleted_at)}</td>
-      <td><button class="btn sm" data-act="restore">恢复</button></td>`;
+      <td><button class="btn sm" data-act="restore">恢复</button>
+          <button class="btn sm danger" data-act="destroy">彻底删除</button></td>`;
     tr.dataset.id = r.id;
     tbody.append(tr);
   });
+  $('#trash-count').textContent = rows.length ? `共 ${rows.length} 条` : '';
+  $('#btn-trash-clear').disabled = rows.length === 0;
 }
 
 // —— 事件绑定 ——
@@ -367,14 +370,46 @@ $('#rules-table').addEventListener('click', async (e) => {
 });
 
 $('#trash-table').addEventListener('click', async (e) => {
-  const btn = e.target.closest('button[data-act="restore"]');
+  const btn = e.target.closest('button[data-act]');
   if (!btn) return;
   const id = btn.closest('tr').dataset.id;
   try {
+    if (btn.dataset.act === 'destroy') {
+      const ok = await confirmDialog({
+        title: '彻底删除',
+        message: '彻底删除后无法恢复，确定删除这条记录？',
+        okText: '彻底删除',
+        danger: true,
+      });
+      if (!ok) return;
+      await api(`/api/rules/${id}/permanent`, { method: 'DELETE' });
+      toast('已彻底删除');
+      loadTrash();
+      return;
+    }
     await api(`/api/rules/${id}/restore`, { method: 'POST' });
     toast('已恢复');
     loadTrash();
     loadMeta();
+  } catch (err) {
+    toast(err.message);
+  }
+});
+
+$('#btn-trash-clear').addEventListener('click', async () => {
+  const count = $$('#trash-table tbody tr').length;
+  if (count === 0) return;
+  const ok = await confirmDialog({
+    title: '清空回收站',
+    message: `将彻底删除回收站中全部 ${count} 条记录，无法恢复。`,
+    okText: '清空',
+    danger: true,
+  });
+  if (!ok) return;
+  try {
+    const res = await api('/api/rules/trash/clear', { method: 'POST' });
+    toast(`已清空回收站（${res.count} 条）`);
+    loadTrash();
   } catch (err) {
     toast(err.message);
   }
