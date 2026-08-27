@@ -24,10 +24,13 @@ async function loadUsers() {
     const actions = u.is_super
       ? '<button class="btn sm" data-act="edit-user">编辑</button><span class="hint">超管不可禁用</span>'
       : u.disabled_at
-        ? '<button class="btn sm" data-act="edit-user">编辑</button><button class="btn sm" data-act="restore-user">恢复</button>'
+        ? `<button class="btn sm" data-act="edit-user">编辑</button>
+           <button class="btn sm" data-act="restore-user">恢复</button>
+           <button class="btn sm danger" data-act="delete-user">删除</button>`
         : `<button class="btn sm" data-act="edit-user">编辑</button>
            <button class="btn sm" data-act="reset-pw">重置密码</button>
-           <button class="btn sm danger" data-act="disable-user">禁用</button>`;
+           <button class="btn sm danger" data-act="disable-user">禁用</button>
+           <button class="btn sm danger" data-act="delete-user">删除</button>`;
     tr.innerHTML = `
       <td class="mono">${escapeHtml(u.username)}</td>
       <td>${escapeHtml(u.display_name)}</td>
@@ -54,6 +57,10 @@ $('#user-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = new FormData(e.target);
   $('#user-error').textContent = '';
+  if (f.get('password') !== f.get('confirm_password')) {
+    $('#user-error').textContent = '两次输入的密码不一致';
+    return;
+  }
   try {
     await api('/api/users', {
       method: 'POST',
@@ -131,6 +138,16 @@ $('#users-table').addEventListener('click', async (e) => {
     } else if (btn.dataset.act === 'restore-user') {
       await api(`/api/users/${id}/restore`, { method: 'POST' });
       toast('已恢复');
+    } else if (btn.dataset.act === 'delete-user') {
+      const ok = await confirmDialog({
+        title: '删除用户',
+        message: `永久删除 ${username}？此操作不可恢复。`,
+        okText: '删除',
+        danger: true,
+      });
+      if (!ok) return;
+      await api(`/api/users/${id}/permanent`, { method: 'DELETE' });
+      toast('用户已删除');
     } else if (btn.dataset.act === 'reset-pw') {
       const pw = await promptDialog({
         title: '重置密码',

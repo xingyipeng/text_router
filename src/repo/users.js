@@ -64,6 +64,20 @@ export function setPassword(db, id, password) {
   return getUser(db, id);
 }
 
+// 彻底删除用户（含会话）。记录归属不级联：有活跃记录时由路由层拦截。
+export function deleteUser(db, id) {
+  db.transaction(() => {
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(id);
+    db.prepare('DELETE FROM users WHERE id = ?').run(id);
+  })();
+}
+
+export function countActiveFilesByUser(db, userId) {
+  return db.prepare(
+    'SELECT COUNT(*) AS n FROM verify_files WHERE created_by = ? AND deleted_at IS NULL'
+  ).get(userId).n;
+}
+
 export function countUsers(db) {
   return db.prepare('SELECT COUNT(*) AS n FROM users').get().n;
 }

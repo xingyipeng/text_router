@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import {
   createUser, getUser, listUsers, disableUser, restoreUser, setPassword, updateUser,
+  deleteUser, countActiveFilesByUser,
 } from '../repo/users.js';
 import { UniqueViolation } from '../repo/errors.js';
 import { MIN_PASSWORD_LENGTH } from '../validate.js';
@@ -80,6 +81,21 @@ export function createUserRoutes({ db }) {
     if (target.disabled_at) return c.json({ error: '该用户已被禁用' }, 400);
 
     disableUser(db, target.id);
+    return c.body(null, 204);
+  });
+
+  // 彻底删除（区别于上面的软删除/禁用）
+  router.delete('/:id/permanent', (c) => {
+    const target = getUser(db, Number(c.req.param('id')));
+    if (!target) return c.json({ error: '用户不存在' }, 404);
+    if (target.is_super) return c.json({ error: '超级管理员不可被删除' }, 403);
+
+    const n = countActiveFilesByUser(db, target.id);
+    if (n > 0) {
+      return c.json({ error: `该用户名下还有 ${n} 条路由记录，请先删除或转移` }, 400);
+    }
+
+    deleteUser(db, target.id);
     return c.body(null, 204);
   });
 

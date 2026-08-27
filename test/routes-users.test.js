@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openDb } from '../src/db.js';
 import { createUser } from '../src/repo/users.js';
+import { createFile } from '../src/repo/rules.js';
 import { createRequestLog } from '../src/requestlog.js';
 import { createApp } from '../src/app.js';
 
@@ -205,6 +206,57 @@ describe('DELETE /api/users/:id', () => {
 
   it('不存在的 id 返回 404', async () => {
     expect((await as(superCookie)('/api/users/9999', 'DELETE')).status).toBe(404);
+  });
+});
+
+describe('DELETE /api/users/:id/permanent', () => {
+  it('彻底删除普通用户返回 204，之后无法登录且不出现在列表', async () => {
+    const users = await (await as(superCookie)('/api/users')).json();
+    const alice = users.find(u => u.username === 'alice');
+    expect((await as(superCookie)(`/api/users/${alice.id}/permanent`, 'DELETE')).status).toBe(204);
+    const after = await (await as(superCookie)('/api/users')).json();
+    expect(after.find(u => u.username === 'alice')).toBeUndefined();
+    const res = await app.request('/api/auth/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', host: 'admin.local' },
+      body: JSON.stringify({ username: 'alice', password: 'password1234' }),
+    });
+    expect(res.status).toBe(401);
+  });
+
+  it('该用户既有会话一并清除', async () => {
+    const users = await (await as(superCookie)('/api/users')).json();
+    const alice = users.find(u => u.username === 'alice');
+    await as(superCookie)(`/api/users/${alice.id}/permanent`, 'DELETE');
+    expect((await as(plainCookie)('/api/rules')).status).toBe(401);
+  });
+
+  it('已禁用的用户也可彻底删除', async () => {
+    const users = await (await as(superCookie)('/api/users')).json();
+    const alice = users.find(u => u.username === 'alice');
+    await as(superCookie)(`/api/users/${alice.id}`, 'DELETE');
+    expect((await as(superCookie)(`/api/users/${alice.id}/permanent`, 'DELETE')).status).toBe(204);
+  });
+
+  it('删除超级管理员返回 403', async () => {
+    const users = await (await as(superCookie)('/api/users')).json();
+    const root = users.find(u => u.username === 'root');
+    expect((await as(superCookie)(`/api/users/${root.id}/permanent`, 'DELETE')).status).toBe(403);
+  });
+
+  it('用户有活跃路由记录时返回 400，用户保留', async () => {
+    const users = await (await as(superCookie)('/api/users')).json();
+    const alice = users.find(u => u.username === 'alice');
+    createFile(db, { host: 'a.com', filename: 'x.txt', content: 'v', userId: alice.id });
+    const res = await as(superCookie)(`/api/users/${alice.id}/permanent`, 'DELETE');
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toContain('1 条路由记录');
+    const after = await (await as(superCookie)('/api/users')).json();
+    expect(after.find(u => u.username === 'alice')).toBeDefined();
+  });
+
+  it('不存在的 id 返回 404', async () => {
+    expect((await as(superCookie)('/api/users/9999/permanent', 'DELETE')).status).toBe(404);
   });
 });
 
