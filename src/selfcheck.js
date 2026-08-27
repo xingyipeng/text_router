@@ -66,7 +66,9 @@ export async function runExternalCheck(file, { fetchImpl = fetch, timeoutMs = 80
   if (!file.host || isPattern(file.host)) {
     return {
       code: CHECK_CODES.NO_HOST,
-      detail: '模式规则无法确定验证域名，请手动访问目标 URL 确认。',
+      detail: !file.host || file.host === '*'
+        ? '全局记录无法确定验证域名，请手动访问目标 URL 确认。'
+        : '模式规则无法确定验证域名，请手动访问目标 URL 确认。',
     };
   }
 

@@ -415,11 +415,17 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
       <p>把从微信后台下载的 <b>.txt</b> 文件拖到这里，自动填充</p>
     </div>
-    <label>域名
-      <button type="button" id="btn-host-help" class="btn link" title="查看规则配置说明">?</button>
-      <input name="host" placeholder="精确域名或通配模式：* 单层、** 任意层，如 *.example.com、**.example.com；单独 * 表示所有域名">
-    </label>
+    <div class="form-row">
+      <label>域名
+        <button type="button" id="btn-host-help" class="btn link" title="查看规则配置说明">?</button>
+        <input name="host" placeholder="精确域名或通配模式：* 单层、** 任意层，如 *.example.com、**.example.com；单独 * 表示所有域名">
+      </label>
+      <label>优先级
+        <input name="priority" type="number" min="0" max="1000" step="1" placeholder="0">
+      </label>
+    </div>
     <p class="hint" id="host-global-hint" hidden>将保存为全局 *（对所有域名生效）</p>
+    <p class="hint">数字越大越优先，多条规则冲突时才需要改（0-1000）</p>
     <label>路径
       <input name="filename" required placeholder="MP_verify_xxxxxxxx.txt，可含子目录：h5/xxx.txt">
     </label>
@@ -427,10 +433,6 @@
       <textarea name="content" rows="3" required></textarea>
     </label>
     <p id="content-warnings" class="warn"></p>
-    <label>优先级
-      <input name="priority" type="number" min="0" max="1000" step="1" placeholder="0">
-      <span class="hint">数字越大越优先，多条规则冲突时才需要改（0-1000）</span>
-    </label>
     <label>备注
       <input name="note" placeholder="属于哪个公众号 / 小程序 / 项目">
     </label>

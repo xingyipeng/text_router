@@ -129,6 +129,7 @@ describe('runExternalCheck', () => {
     });
     expect(r.code).toBe(CHECK_CODES.NO_HOST);
     expect(called).toBe(false);
+    expect(r.detail).toContain('全局记录无法确定验证域名');
   });
 
   it('模式 host 返回 NO_HOST 且不发请求', async () => {

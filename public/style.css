@@ -610,7 +610,10 @@ dialog[open] { animation: dialogIn .24s cubic-bezier(.16, 1, .3, 1); }
 }
 .dialog-form h2 { font-size: 18px; color: #15233a; padding-bottom: 14px;
   border-bottom: 1px solid var(--border); }
-.dialog-form label { gap: 7px; }
+.dialog-form label { gap: 7px; display: block; }
+.dialog-form label > .btn.link { vertical-align: middle; margin-left: 4px; }
+.form-row { display: grid; grid-template-columns: 1fr 150px; gap: 12px; align-items: start; }
+#rule-dialog { width: min(560px, calc(100vw - 32px)); }
 .dialog-form input, .dialog-form textarea { padding: 10px 12px; border-radius: 10px; }
 .dialog-message { margin: 0; font-size: 13.5px; line-height: 1.7; color: var(--text-2); }
 dialog menu {

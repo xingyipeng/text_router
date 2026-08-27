@@ -16,7 +16,7 @@ const ICONS = {
 
 const CHECK_HINTS = {
   OK: '线上完全正常',
-  NO_HOST: '全局记录，无法自动验证',
+  NO_HOST: '无法自动验证',
   EGRESS_BLOCKED: '本机无法出网，外部验证不可用',
   DNS_OR_CONNECT_FAILED: '域名解析或连接失败',
   REDIRECTED: '被重定向，微信不接受',
