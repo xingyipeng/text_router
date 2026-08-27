@@ -38,8 +38,10 @@ describe('matchHost', () => {
     expect(matchHost('a.*.com', 'a.b.c.com')).toBe(false);
   });
 
-  it('* 与 ** 混用', () => {
+  it('* 与 ** 混用：*.** 表示至少一层子域', () => {
+    expect(matchHost('*.**.example.com', 'a.example.com')).toBe(true);
     expect(matchHost('*.**.example.com', 'a.b.example.com')).toBe(true);
+    expect(matchHost('*.**.example.com', 'x.y.z.example.com')).toBe(true);
     expect(matchHost('*.**.example.com', 'example.com')).toBe(false);
   });
 
@@ -91,6 +93,12 @@ describe('normalizePattern', () => {
 
   it('非法模式拒绝：半段/叠加通配、端口、方括号', () => {
     for (const bad of ['a*.example.com', '***.example.com', '*.example.com:8080', '*.ex[ample.com']) {
+      expect(normalizePattern(bad).ok, bad).toBe(false);
+    }
+  });
+
+  it('非模式域名中的方括号（字符类/IPv6 写法）拒绝，不静默截断', () => {
+    for (const bad of ['[0-9a-z].example.com', '[a-z]*.com', '[::1]']) {
       expect(normalizePattern(bad).ok, bad).toBe(false);
     }
   });

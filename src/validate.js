@@ -1,17 +1,15 @@
-// 路径：以 .txt 结尾，按 / 分段；每段 1-80 位字母/数字/下划线/连字符/点，
-// 段不得为 . 或 ..；总长不超过 MAX_FILENAME_LENGTH。
-// filename 只作为数据库键值参与匹配，不接触文件系统，校验用于保持 URL 空间整洁。
-const SEGMENT_RE = /^[A-Za-z0-9._-]{1,80}$/;
-
+// 路径不限制格式：任意非空字符串均可（扩展名、字符、子目录都不限），
+// 只要求非空、不以 / 开头（存值不带前导 /，请求路径会去掉一层）、总长不超过 MAX_FILENAME_LENGTH。
+// filename 只作为数据库键值参与匹配，不接触文件系统。
 export const MAX_CONTENT_BYTES = 4096;
 export const MIN_PASSWORD_LENGTH = 8;
 export const MAX_FILENAME_LENGTH = 255;
 
 export function isValidFilename(name) {
   if (typeof name !== 'string') return false;
-  if (name.length > MAX_FILENAME_LENGTH || !name.endsWith('.txt')) return false;
-  const segments = name.slice(0, -4).split('/');
-  return segments.every((s) => SEGMENT_RE.test(s) && s !== '.' && s !== '..');
+  if (!name || name.length > MAX_FILENAME_LENGTH) return false;
+  if (name.startsWith('/')) return false;
+  return true;
 }
 
 export function normalizeHost(raw) {

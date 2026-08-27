@@ -18,6 +18,10 @@ export function createVerifyHandler({ db, requestLog }) {
 
     const row = isValidFilename(filename) ? matchFile(db, resolvedHost, filename) : undefined;
 
+    // 非 .txt 路径无命中时返回 null 透传（交给静态文件与 notFound），也不记入
+    // 请求日志，避免 style.css 等静态资源刷屏。.txt 未命中仍 404 + 留痕，保持原有排障语义。
+    if (!row && !c.req.path.endsWith('.txt')) return null;
+
     requestLog.record({
       host: c.req.header('host') || '',
       forwardedHost: c.req.header('x-forwarded-host') || '',

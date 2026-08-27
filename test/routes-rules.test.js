@@ -77,9 +77,16 @@ describe('POST /api/rules', () => {
   });
 
   it('非法文件名返回 400', async () => {
-    for (const filename of ['../x.txt', 'x.php', '', 'x.txt.php', '/x.txt', 'a//b.txt']) {
+    for (const filename of ['', '/x.txt', 'a'.repeat(256)]) {
       const res = await api('/api/rules', 'POST', { host: 'a.com', filename, content: 'v' });
       expect(res.status, filename).toBe(400);
+    }
+  });
+
+  it('路径不限制扩展名：非 .txt 也能创建', async () => {
+    for (const filename of ['x.php', 'apple-app-site-association', '.well-known/assetlinks.json']) {
+      const res = await api('/api/rules', 'POST', { host: 'a.com', filename, content: 'v' });
+      expect(res.status, filename).toBe(201);
     }
   });
 
@@ -96,11 +103,11 @@ describe('POST /api/rules', () => {
     expect(res.status).toBe(400);
   });
 
-  it('文件名长度边界：80 字符通过，81 字符 400', async () => {
+  it('路径长度边界：255 字符通过，256 字符 400', async () => {
     expect((await api('/api/rules', 'POST',
-      { host: 'a.com', filename: `${'a'.repeat(80)}.txt`, content: 'v' })).status).toBe(201);
+      { host: 'a.com', filename: 'a'.repeat(255), content: 'v' })).status).toBe(201);
     expect((await api('/api/rules', 'POST',
-      { host: 'a.com', filename: `${'b'.repeat(81)}.txt`, content: 'v' })).status).toBe(400);
+      { host: 'a.com', filename: 'b'.repeat(256), content: 'v' })).status).toBe(400);
   });
 
   it('最短文件名与大小写/数字/下划线/连字符混合均合法', async () => {
@@ -543,7 +550,7 @@ describe('POST /api/rules/import', () => {
     const res = await api('/api/rules/import', 'POST', {
       mode: 'skip',
       files: [
-        { host: 'a.com', filename: 'bad.php', content: 'x' }, // 非法文件名
+        { host: 'a.com', filename: '/bad.php', content: 'x' }, // 非法文件名（前导斜杠）
         { host: 'a.com', filename: 'ok.txt', content: 'ok' },
         { filename: 'no-content.txt' }, // 缺 content
       ],
@@ -554,7 +561,7 @@ describe('POST /api/rules/import', () => {
     expect(body.skipped).toBe(0);
     expect(body.errors).toHaveLength(2);
     expect(body.errors[0]).toMatchObject({
-      host: 'a.com', filename: 'bad.php', reason: expect.stringContaining('路径'),
+      host: 'a.com', filename: '/bad.php', reason: expect.stringContaining('路径'),
     });
     expect(body.errors[1].reason).toContain('内容');
 

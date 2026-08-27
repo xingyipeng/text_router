@@ -1,6 +1,6 @@
 # text_router
 
-自托管文本路由器：集中托管微信域名校验文件（`MP_verify_xxx.txt`），把任意深度 `.txt` 请求变成可见、可查、可控的流量。单进程、单 SQLite、无云依赖、无前端构建。
+自托管文本路由器：集中托管微信域名校验文件（`MP_verify_xxx.txt`），把任意路径的文本请求变成可见、可查、可控的流量。单进程、单 SQLite、无云依赖、无前端构建。
 
 ## 背景
 
@@ -10,11 +10,11 @@
 - 微信的抓取请求完全不可见，校验失败只能盲排
 - 多人改文件无留痕，误删误改无法恢复
 
-text_router 用一个统一出口解决：所有 `.txt` 请求转发到它，按「域名 + 路径」匹配返回内容，请求实时留痕、命中可查、规则可多人管理、备份可恢复。
+text_router 用一个统一出口解决：把要托管的路径请求转发到它，按「域名 + 路径」匹配返回内容，请求实时留痕、命中可查、规则可多人管理、备份可恢复。
 
 ## 功能特性
 
-- 路由规则全局生效或按域名绑定，支持 `*.example.com` / `**.example.com` 通配与手动优先级，路径支持任意深度子目录（`h5/xxx.txt`）
+- 路由规则全局生效或按域名绑定，支持 `*.example.com` / `**.example.com` 通配与手动优先级，路径不限制扩展名、支持任意深度子目录（如 `h5/xxx.txt`、`.well-known/assetlinks.json`）
 - 微信下载的校验文件直接**拖拽导入**，文件名内容自动填入
 - 实时看板：24 小时请求趋势、命中率、按域名分布
 - 两层自检：内部数据检查 + 外部真实请求验证，失败原因精确分类
@@ -73,7 +73,7 @@ crpi-1z575ueyebmvfwqg.cn-shanghai.personal.cr.aliyuncs.com/yujianpengpeng/text_r
 
 ## 网关需要做什么
 
-1. 把 `.txt` 请求转发到本服务 3000 端口，**不重写路径**——微信校验文件必须位于根路径；本服务同时支持子目录，一条规则转发任意深度 `.txt` 即可
+1. 把要托管的路径转发到本服务 3000 端口，**不重写路径**——微信校验文件必须位于根路径；路径不限制扩展名，一条规则即可转发任意路径（如 `.txt`、`.well-known/assetlinks.json`）
 2. **保留原始域名**（`Host` 或 `X-Forwarded-Host`）；做不到就把规则域名填 `*` 全局生效，支持 `*.example.com` / `**.example.com` 通配与优先级
 
 完整配置见 [docs/网关接入/](docs/网关接入/)（Nginx / Traefik / Caddy / Apache / Kong / APISIX），管理端「帮助」面板也可直接查看。
@@ -105,7 +105,7 @@ crpi-1z575ueyebmvfwqg.cn-shanghai.personal.cr.aliyuncs.com/yujianpengpeng/text_r
 - **自检**：内部检查数据正确性（含「被全局规则遮蔽」检测），外部真实发起一次 HTTPS 请求验证链路；失败原因精确分类
 - **内容保护**：微信要求逐字节精确匹配，BOM / CRLF / 首尾空白只标黄警告，点「一键清理」才改动
 - **批量迁移**：规则可导出 JSON、导入合并（重复可选跳过或覆盖）
-- **子目录路径**：路径可含子目录，每段 1-80 位、总长 ≤255；微信校验文件本身仍须根路径
+- **子目录路径**：路径不限制格式（任意扩展名/字符均可，非空、总长 ≤255、不以 `/` 开头）；微信校验文件本身仍须根路径
 
 ## 权限与账号
 
@@ -130,7 +130,7 @@ CLI 与界面共用同一套逻辑（兼容 cron）：`node scripts/backup.js --
 
 1. 内容必须**逐字节精确匹配**，尾部多个换行就失败
 2. 内容**不能含 BOM**
-3. 必须返回 **200 且无重定向**——链路上的 HTTP→HTTPS 跳转要为 `.txt` 配例外
+3. 必须返回 **200 且无重定向**——链路上的 HTTP→HTTPS 跳转要为校验路径配例外
 4. `Content-Type` 必须 `text/plain`（本服务已固定，并附 `no-store` 防缓存）
 5. 文件必须在**域名根路径**，依赖网关不重写路径
 
@@ -141,7 +141,7 @@ CLI 与界面共用同一套逻辑（兼容 cron）：`node scripts/backup.js --
 ## 开发
 
 ```bash
-npm install && npm test   # 326 项测试全过（Node 22）
+npm install && npm test   # 405 项测试全过（Node 22）
 SUPER_ADMIN_PASSWORD=password1234 npm run dev
 ```
 
@@ -155,8 +155,8 @@ src/
 ├── password.js      scrypt 哈希与常数时间校验
 ├── db.js            SQLite 连接与表结构
 ├── repo/            仓储层，只认识数据库
-├── verify.js        任意深度 *.txt 请求的匹配与响应
-├── requestlog.js    .txt 请求的内存记录（排障、看板共用）
+├── verify.js        任意路径的规则匹配与响应
+├── requestlog.js    校验请求的内存记录（排障、看板共用）
 ├── backup.js        备份核心：在线备份、定时调度、恢复（界面与 CLI 共用）
 ├── settings.js      统一设置读写
 ├── selfcheck.js     两层自检与错误分类

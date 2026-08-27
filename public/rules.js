@@ -174,6 +174,9 @@ function validateHostInput(raw) {
     if (labels.every((l) => l === '**')) return { value: '*' };
     return { value: h };
   }
+  if (/[\[\]]/.test(h)) {
+    return { error: '非法域名：不支持方括号与 [0-9a-z] 这类字符类写法' };
+  }
   return { value: h };
 }
 
@@ -283,7 +286,10 @@ $('#btn-rules-refresh').addEventListener('click', () => {
   loadMeta();
 });
 $('#btn-new').addEventListener('click', () => openDialog(null));
-$('#btn-host-help').addEventListener('click', () => openHelpDoc('rules-guide'));
+$('#btn-host-help').addEventListener('click', () => {
+  $('#rule-dialog').close(); // 跳到帮助页前先关弹窗，避免浮在帮助页上
+  openHelpDoc('rules-guide');
+});
 $('#rule-cancel').addEventListener('click', () => $('#rule-dialog').close());
 $('#rule-form').content.addEventListener('input', updateWarnings);
 
@@ -524,9 +530,16 @@ $('#btn-rules-import').addEventListener('click', () => {
   $('#rules-import-error').textContent = '';
   $('#rules-import-result').hidden = true;
   $('#rules-import-file').value = '';
+  const submitBtn = $('#rules-import-form button[value="save"]');
+  submitBtn.type = 'submit';
+  submitBtn.textContent = '开始导入';
   $('#rules-import-dialog').showModal();
 });
 $('#rules-import-cancel').addEventListener('click', () => $('#rules-import-dialog').close());
+// 导入成功后主按钮变为「完成」（type=button，不再触发表单提交），点击关闭弹窗
+$('#rules-import-form button[value="save"]').addEventListener('click', (e) => {
+  if (e.currentTarget.type === 'button') $('#rules-import-dialog').close();
+});
 
 $('#rules-import-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -563,6 +576,8 @@ $('#rules-import-form').addEventListener('submit', async (e) => {
     }
     resultEl.innerHTML = html;
     resultEl.hidden = false;
+    submitBtn.type = 'button';
+    submitBtn.textContent = '完成';
     loadRules();
     loadMeta();
   } catch (err) {

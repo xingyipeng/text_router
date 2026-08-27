@@ -15,10 +15,12 @@ export function createApp({ db, requestLog, config }) {
   const app = new Hono();
 
   // 校验文件响应：公开路径，不经过任何鉴权中间件。
-  // 任意深度的 *.txt 都进入校验处理器；其余路径透传 next()，交给静态文件与 notFound。
-  app.get('*', async (c, next) => {
-    if (!c.req.path.endsWith('.txt')) return next();
-    return createVerifyHandler({ db, requestLog })(c);
+  // 任意路径先查规则（路径不限制扩展名）：命中即返回；.txt 未命中 404 留痕；
+  // 其余路径未命中返回 null 透传 next()，交给静态文件与 notFound。
+  app.get('*', (c, next) => {
+    const res = createVerifyHandler({ db, requestLog })(c);
+    if (res === null) return next();
+    return res;
   });
 
   app.use('/api/*', sessionMiddleware({ db }));

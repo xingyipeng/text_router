@@ -120,8 +120,16 @@ describe('GET /{name}.txt', () => {
     expect((await get('/%2E%2E%2Fetc%2Fpasswd.txt')).status).toBe(404);
   });
 
-  it('非 .txt 后缀不进入校验文件处理器', async () => {
+  it('路径不限制扩展名：任意后缀命中规则即返回', async () => {
+    createFile(db, { host: 'a.com', filename: 'x.php', content: 'php', userId: 1 });
+    createFile(db, { host: 'a.com', filename: '.well-known/assetlinks.json', content: 'links', userId: 1 });
+    expect(await (await get('/x.php')).text()).toBe('php');
+    expect(await (await get('/.well-known/assetlinks.json')).text()).toBe('links');
+  });
+
+  it('无记录的非 .txt 路径透传 404', async () => {
     expect((await get('/x.php')).status).toBe(404);
+    expect((await get('/style.css')).status).toBe(404);
   });
 });
 
@@ -184,18 +192,18 @@ describe('更多域名与路径场景', () => {
     expect((await get('/x.txt', 'a.com.')).status).toBe(200);
   });
 
-  it('文件名恰好 80 字符命中，81 字符不命中', async () => {
-    const name80 = 'a'.repeat(80) + '.txt';
-    createFile(db, { host: 'a.com', filename: name80, content: 'v', userId: 1 });
-    expect((await get(`/${name80}`)).status).toBe(200);
-    expect((await get(`/${'b'.repeat(81)}.txt`)).status).toBe(404);
+  it('路径总长 255 以内命中，超过 255 不命中', async () => {
+    const name255 = 'a'.repeat(255);
+    createFile(db, { host: 'a.com', filename: name255, content: 'v', userId: 1 });
+    expect((await get(`/${name255}`)).status).toBe(200);
+    expect((await get(`/${'b'.repeat(256)}`)).status).toBe(404);
   });
 
-  it('文件名含非法字符不命中', async () => {
-    createFile(db, { host: 'a.com', filename: 'x.txt', content: 'v', userId: 1 });
-    expect((await get('/x y.txt')).status).toBe(404);
-    expect((await get('/校验文件.txt')).status).toBe(404);
-    expect((await get('/x..txt')).status).toBe(404);
+  it('含空格与中文的路径同样可命中', async () => {
+    createFile(db, { host: 'a.com', filename: 'x y.txt', content: 'space', userId: 1 });
+    createFile(db, { host: 'a.com', filename: '校验文件.txt', content: 'cn', userId: 1 });
+    expect(await (await get('/x%20y.txt')).text()).toBe('space');
+    expect(await (await get('/校验文件.txt')).text()).toBe('cn');
   });
 });
 
@@ -235,5 +243,23 @@ describe('请求记录', () => {
     expect(e.host).toBe('GATEWAY.internal:8080');
     expect(e.forwardedHost).toBe('Real.COM');
     expect(e.resolvedHost).toBe('real.com');
+  });
+
+  it('非 .txt 未命中不记录（静态资源不刷屏），.txt 未命中仍记录', async () => {
+    await get('/missing.txt');
+    await get('/style.css');
+    const entries = requestLog.list();
+    expect(entries).toHaveLength(1);
+    expect(entries[0].filename).toBe('missing.txt');
+    expect(entries[0].hit).toBe(false);
+  });
+
+  it('非 .txt 命中同样记录', async () => {
+    createFile(db, { host: 'a.com', filename: 'app.json', content: 'v', userId: 1 });
+    await get('/app.json');
+    const entries = requestLog.list();
+    expect(entries).toHaveLength(1);
+    expect(entries[0].filename).toBe('app.json');
+    expect(entries[0].hit).toBe(true);
   });
 });

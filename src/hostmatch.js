@@ -57,6 +57,9 @@ export function normalizePattern(raw) {
     if (h.split('.').every((l) => l === '**')) return { ok: true, value: '*' }; // 单独 ** 归一化为 *
     return { ok: true, value: h };
   }
+  if (/[\[\]]/.test(h)) {
+    return { ok: false, error: `非法域名「${raw}」：不支持方括号与 [0-9a-z] 这类字符类写法` };
+  }
   return { ok: true, value: normalizeHost(h) };
 }
 
