@@ -129,9 +129,13 @@ describe('normalizePattern', () => {
   });
 
   it('非法模式拒绝：半段/叠加通配、端口、方括号', () => {
-    for (const bad of ['a*.example.com', '***.example.com', '*.*.com', '*.example.com:8080', '*.ex[ample.com']) {
+    for (const bad of ['a*.example.com', '***.example.com', '*.example.com:8080', '*.ex[ample.com']) {
       expect(normalizePattern(bad).ok, bad).toBe(false);
     }
+  });
+
+  it('相邻整段通配合法（每段单独满足规则即可）', () => {
+    expect(normalizePattern('*.*.com')).toEqual({ ok: true, value: '*.*.com' });
   });
 
   it('标签长度 1-63 位', () => {
@@ -260,16 +264,17 @@ export function matchHost(pattern, host) {
 
 // 保存/导入时的校验 + 归一化。返回 { ok, value } 或 { ok, error }。
 export function normalizePattern(raw) {
-  if (typeof raw !== 'string') return { error: '域名必须是字符串' };
+  if (typeof raw !== 'string') return { ok: false, error: '域名必须是字符串' };
   // 与 normalizeHost 习惯一致：取逗号首段、trim、小写、去尾点
   let h = raw.split(',')[0].trim().toLowerCase().replace(/\.+$/, '');
   if (!h) return { ok: true, value: '*' };
   if (h.includes('*')) {
-    if (h.length > 255) return { error: '域名模式总长不能超过 255' };
-    if (/[:\[\]]/.test(h)) return { error: '模式中不允许端口或方括号' };
+    if (h.length > 255) return { ok: false, error: '域名模式总长不能超过 255' };
+    if (/[:\[\]]/.test(h)) return { ok: false, error: '模式中不允许端口或方括号' };
     for (const l of h.split('.')) {
       if (l !== '*' && l !== '**' && !LABEL_RE.test(l)) {
         return {
+          ok: false,
           error: `非法域名模式「${raw}」：每段只能是 *、** 或 1-63 位小写字母/数字/下划线/连字符（不支持 a*、*** 等写法）`,
         };
       }
