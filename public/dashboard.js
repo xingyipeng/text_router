@@ -13,7 +13,8 @@ async function loadDashboard() {
     $('#dash-hits').textContent = s.requests.todayHits;
     $('#dash-misses').textContent = s.requests.todayMisses;
     renderTrend(s.requests.byHour);
-    renderDomains(s.files.byDomain);
+    renderMainDomains(s.files.byMainDomain);
+    renderRuleHosts(s.files.byRuleHost);
   } finally {
     // 数据就绪后关闭骨架微光（纯展示）
     panel.classList.add('loaded');
@@ -76,24 +77,24 @@ function renderTrend(hours) {
     ${labels}`;
 }
 
-function renderDomains(rows) {
+// 手工环形图：蓝色系柔和分段
+const COLORS = ['#2563eb', '#60a5fa', '#93c5fd', '#818cf8', '#a5b4fc', '#94a3b8', '#cbd5e1'];
+
+function renderMainDomains(rows) {
   const box = $('#dash-domains');
   if (!rows.length) {
     box.innerHTML = '<p class="empty">暂无绑定域名的记录</p>';
     return;
   }
-  const sorted = [...rows].sort((a, b) => b.count - a.count);
-  const total = sorted.reduce((s, r) => s + r.count, 0);
+  const total = rows.reduce((s, r) => s + r.count, 0);
   if (!total) {
     box.innerHTML = '<p class="empty">暂无绑定域名的记录</p>';
     return;
   }
 
-  // 手工环形图：蓝色系柔和分段
-  const COLORS = ['#2563eb', '#60a5fa', '#93c5fd', '#818cf8', '#a5b4fc', '#94a3b8', '#cbd5e1'];
   const R = 54, C = 2 * Math.PI * R;
   let acc = 0;
-  const segs = sorted.map((r, i) => {
+  const segs = rows.map((r, i) => {
     const frac = r.count / total;
     const seg = `<circle cx="70" cy="70" r="${R}" fill="none"
       stroke="${COLORS[i % COLORS.length]}" stroke-width="17"
@@ -107,21 +108,37 @@ function renderDomains(rows) {
   box.innerHTML = `
     <div class="domain-chart">
       <div class="domain-donut">
-        <svg viewBox="0 0 140 140" width="134" height="134" role="img" aria-label="域名分布环形图">
+        <svg viewBox="0 0 140 140" width="134" height="134" role="img" aria-label="主域名分布环形图">
           <circle cx="70" cy="70" r="${R}" fill="none" stroke="#eef2f8" stroke-width="17"/>
           ${segs}
           <text x="70" y="66" text-anchor="middle" class="donut-total">${total}</text>
-          <text x="70" y="84" text-anchor="middle" class="donut-cap">绑定域名</text>
+          <text x="70" y="84" text-anchor="middle" class="donut-cap">主域名</text>
         </svg>
       </div>
       <div class="domain-legend">
-        ${sorted.map((r, i) => `
+        ${rows.map((r, i) => `
           <div class="domain-row">
             <span class="domain-dot" style="background:${COLORS[i % COLORS.length]}"></span>
             <span class="domain-host mono">${escapeHtml(r.host)}</span>
             <span class="domain-count">${r.count}</span>
           </div>`).join('')}
       </div>
+    </div>`;
+}
+
+// 按规则视图：域名按原样列出（含通配模式），一条不隐藏
+function renderRuleHosts(rows) {
+  const box = $('#dash-rule-hosts');
+  if (!rows.length) return;
+  box.innerHTML = `
+    <h3 class="domain-subtitle">按规则（含通配模式）</h3>
+    <div class="domain-legend">
+      ${rows.map((r, i) => `
+        <div class="domain-row">
+          <span class="domain-dot" style="background:${COLORS[i % COLORS.length]}"></span>
+          <span class="domain-host mono">${escapeHtml(r.host)}</span>
+          <span class="domain-count">${r.count}</span>
+        </div>`).join('')}
     </div>`;
 }
 

@@ -1,5 +1,16 @@
 const HOUR_MS = 3600 * 1000;
 
+// 双段公共后缀（如 com.cn）取三段主域，其余取最后两段；可按需扩展
+const MULTI_LABEL_SUFFIXES = new Set(['com.cn', 'net.cn', 'org.cn', 'gov.cn', 'edu.cn', 'ac.cn']);
+
+// 从规则域名提取主域名：剥掉 * / ** 通配标签后取注册域；纯通配无法归类返回空串
+export function mainDomain(host) {
+  const labels = host.split('.').filter((l) => l !== '*' && l !== '**');
+  if (!labels.length) return '';
+  const n = MULTI_LABEL_SUFFIXES.has(labels.slice(-2).join('.')) ? 3 : 2;
+  return labels.slice(-n).join('.');
+}
+
 function startOfDay(ms) {
   const d = new Date(ms);
   d.setHours(0, 0, 0, 0);
@@ -14,11 +25,26 @@ export function computeStats(db, requestLog) {
   const global = db.prepare(
     "SELECT COUNT(*) AS n FROM verify_files WHERE deleted_at IS NULL AND host = '*'"
   ).get().n;
-  const byDomain = db.prepare(`
+  const hostRows = db.prepare(`
     SELECT host, COUNT(*) AS count FROM verify_files
-    WHERE deleted_at IS NULL AND host != '' AND host NOT LIKE '%*%'
-    GROUP BY host ORDER BY count DESC, host ASC
+    WHERE deleted_at IS NULL AND host != '' AND host != '*'
+    GROUP BY host
   `).all();
+
+  // 按规则统计：域名按原样分组（含通配模式），一条不隐藏
+  const byRuleHost = hostRows
+    .map(({ host, count }) => ({ host, count }))
+    .sort((a, b) => b.count - a.count || a.host.localeCompare(b.host));
+
+  // 按主域名统计：通配标签剥掉后聚合（wx-router.saitron-m.com 并入 saitron-m.com）
+  const main = new Map();
+  for (const { host, count } of hostRows) {
+    const m = mainDomain(host);
+    if (m) main.set(m, (main.get(m) || 0) + count);
+  }
+  const byMainDomain = [...main.entries()]
+    .map(([host, count]) => ({ host, count }))
+    .sort((a, b) => b.count - a.count || a.host.localeCompare(b.host));
 
   const entries = requestLog.list(); // 最新在前
   const now = Date.now();
@@ -41,8 +67,9 @@ export function computeStats(db, requestLog) {
       total,
       bound: total - global,
       global,
-      domains: byDomain.length,
-      byDomain,
+      domains: byMainDomain.length,
+      byMainDomain,
+      byRuleHost,
     },
     requests: {
       total: entries.length,
