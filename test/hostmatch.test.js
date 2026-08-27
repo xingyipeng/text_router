@@ -27,6 +27,11 @@ describe('matchHost', () => {
     expect(matchHost('**.example.com', 'other.com')).toBe(false);
   });
 
+  it('单独 ** 等价全局', () => {
+    expect(matchHost('**', '')).toBe(true);
+    expect(matchHost('**', 'a.b.com')).toBe(true);
+  });
+
   it('中间段通配', () => {
     expect(matchHost('a.*.com', 'a.b.com')).toBe(true);
     expect(matchHost('a.*.com', 'a.com')).toBe(false);
@@ -41,6 +46,10 @@ describe('matchHost', () => {
   it('host 大小写不敏感，空 host 不命中非全局模式', () => {
     expect(matchHost('example.com', 'EXAMPLE.COM')).toBe(true);
     expect(matchHost('*.example.com', '')).toBe(false);
+  });
+
+  it('pattern 大小写不敏感', () => {
+    expect(matchHost('Example.COM', 'example.com')).toBe(true);
   });
 });
 
@@ -74,6 +83,10 @@ describe('normalizePattern', () => {
   it('单独 ** 归一化为 *', () => {
     expect(normalizePattern('**')).toEqual({ ok: true, value: '*' });
     expect(normalizePattern('**.')).toEqual({ ok: true, value: '*' });
+  });
+
+  it('**.** 归一化为 *', () => {
+    expect(normalizePattern('**.**')).toEqual({ ok: true, value: '*' });
   });
 
   it('非法模式拒绝：半段/叠加通配、端口、方括号', () => {
@@ -143,6 +156,10 @@ describe('patternIntersects', () => {
     expect(patternIntersects('*.example.com', '**.example.com')).toBe(true);
     expect(patternIntersects('**.example.com', 'example.com')).toBe(true);
     expect(patternIntersects('a.*.com', 'a.b.com')).toBe(true);
+  });
+
+  it('** 占 0 层时相交', () => {
+    expect(patternIntersects('a.**.b', 'a.b')).toBe(true);
   });
 
   it('无共同域名时不相交', () => {

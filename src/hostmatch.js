@@ -14,7 +14,8 @@ export function isPattern(host) {
   return typeof host === 'string' && host.includes('*');
 }
 
-// 回溯标签比较；模式与 host 的标签数都很小，无需记忆化
+// 回溯标签比较；k 个 ** 对上 n 个标签最坏 C(n+k,k) 条路径，
+// 但模式与 host 标签数都很小（规则行数量级），无需记忆化
 function matchFrom(pi, hi, p, h) {
   if (pi === p.length) return hi === h.length;
   const pl = p[pi];
@@ -33,7 +34,7 @@ export function matchHost(pattern, host) {
   const p = typeof pattern === 'string' ? pattern : '';
   const h = typeof host === 'string' ? host : '';
   if (p === '*') return true; // 全局：命中所有（含空 host）
-  return matchFrom(0, 0, p.split('.'), h === '' ? [] : h.toLowerCase().split('.'));
+  return matchFrom(0, 0, p.toLowerCase().split('.'), h === '' ? [] : h.toLowerCase().split('.'));
 }
 
 // 保存/导入时的校验 + 归一化。返回 { ok, value } 或 { ok, error }。
