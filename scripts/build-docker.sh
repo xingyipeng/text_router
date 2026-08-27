@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 跨平台构建 text_router Docker 镜像（默认 linux/amd64 + linux/arm64）
-# 用法见 README「Docker 部署与打包」，或 scripts/build-docker.sh --help
+# 用法：scripts/build-docker.sh --help
 set -euo pipefail
 
 PLATFORMS="linux/amd64,linux/arm64"
@@ -55,16 +55,20 @@ fi
 command -v docker >/dev/null 2>&1 || { echo "错误：未找到 docker 命令" >&2; exit 1; }
 docker buildx version >/dev/null 2>&1 || { echo "错误：Docker 缺少 buildx 插件（Docker 19.03+ 一般自带）" >&2; exit 1; }
 # 默认构建器（如 Docker Desktop 的 desktop-linux）是 docker 驱动，做不了多平台构建，
-# 必须用容器驱动（docker-container）的构建器。一个 buildkit 容器可服务多个项目，
-# 所以优先复用机器上已有的容器驱动构建器，一个都没有才创建一个通用的 multiarch。
-BUILDER_NAME=$(docker buildx ls 2>/dev/null | awk '$2=="docker-container"{print $1; exit}')
-if [ -z "$BUILDER_NAME" ]; then
-  BUILDER_NAME="multiarch"
-  echo "没有可复用的容器驱动构建器，正在创建 ${BUILDER_NAME}（首次需要下载 buildkit 镜像）…"
-  docker buildx create --name "$BUILDER_NAME"
+# 必须用容器驱动（docker-container）的构建器。构建器名固定为 multiarch：
+# 构建缓存跟着构建器容器走，名字固定才能稳定复用（换名字/删构建器 = 缓存全丢）。
+BUILDER_NAME="multiarch"
+if ! docker buildx ls 2>/dev/null | awk -v n="$BUILDER_NAME" '$1==n && $2=="docker-container" {found=1} END {exit !found}'; then
+  echo "构建器 ${BUILDER_NAME} 不存在，正在创建（首次需要下载 buildkit 镜像）…"
+  # 挂载仓库内 buildkitd.toml：docker.io 走国内镜像源，避免直连 Docker Hub 超时
+  docker buildx create --name "$BUILDER_NAME" --driver docker-container \
+    --config "$(cd "$(dirname "$0")" && pwd)/buildkitd.toml" \
+    --platform linux/amd64,linux/arm64
 fi
 echo "使用构建器：$BUILDER_NAME"
 BUILDER="--builder $BUILDER_NAME"
+# 缓存策略说明：构建缓存只留在本机构建器（multiarch）里，删构建器 = 缓存全丢；
+# 阿里云个人版仓库不支持 BuildKit cacheconfig 清单，远端缓存（--cache-to registry）不可用。
 
 # Linux 主机首次跨架构构建前，需要注册一次 QEMU 模拟器（Docker Desktop 已内置，无需执行）：
 #   docker run --rm --privileged tonistiigi/binfmt --install all

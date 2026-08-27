@@ -1,0 +1,5 @@
+# buildx 容器驱动构建器的 BuildKit 配置（构建器创建时由 build-docker.sh 挂载）
+# docker.io 走达道镜像源：直连 Docker Hub 曾间歇性超时/拒绝连接（2026-08 实测），
+# 镜像源可稳定拉取 node:22-slim 等基础镜像
+[registry."docker.io"]
+  mirrors = ["https://docker.m.daocloud.io"]

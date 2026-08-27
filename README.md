@@ -71,6 +71,16 @@ crpi-1z575ueyebmvfwqg.cn-shanghai.personal.cr.aliyuncs.com/yujianpengpeng/text_r
 
 镜像发布 **linux/amd64 + linux/arm64** 双架构；`latest` 指向最新稳定版，其余标签为具体版本号。升级：`docker compose pull && docker compose up -d`。
 
+### 自行打包
+
+一条命令构建并推送双架构镜像（构建器自动创建，docker.io 已配置国内镜像源；构建缓存留存在本机 `multiarch` 构建器中，重复构建秒级复用）：
+
+```bash
+scripts/build-docker.sh --push -t 你的仓库地址/text_router:1.0.5 -t 你的仓库地址/text_router:latest
+```
+
+只在本机试跑：`scripts/build-docker.sh --load`；更多选项见 `scripts/build-docker.sh --help`。
+
 ## 网关需要做什么
 
 1. 把要托管的路径转发到本服务 3000 端口，**不重写路径**——微信校验文件必须位于根路径；路径不限制扩展名，一条规则即可转发任意路径（如 `.txt`、`.well-known/assetlinks.json`）
