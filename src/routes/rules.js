@@ -8,6 +8,7 @@ import {
   isValidFilename, normalizeHost, inspectContent, MAX_CONTENT_BYTES,
 } from '../validate.js';
 import { requireAuth } from '../auth.js';
+import { normalizePattern, isValidPriority } from '../hostmatch.js';
 import { runInternalCheck, runExternalCheck } from '../selfcheck.js';
 import { getSettings } from '../settings.js';
 
@@ -21,12 +22,21 @@ function parsePayload(body) {
   if (Buffer.byteLength(content, 'utf8') > MAX_CONTENT_BYTES) {
     return { error: `内容不能超过 ${MAX_CONTENT_BYTES} 字节` };
   }
+  const host = normalizePattern(body?.host ?? '');
+  if (!host.ok) return { error: host.error };
+  let priority = 0;
+  const rawP = body?.priority;
+  if (rawP !== undefined) {
+    if (!isValidPriority(rawP)) return { error: '优先级必须是 0-1000 的整数' };
+    priority = rawP;
+  }
   return {
     value: {
-      host: normalizeHost(body?.host ?? ''),
+      host: host.value,
       filename,
       content,
       note: typeof body?.note === 'string' ? body.note : '',
+      priority,
     },
   };
 }
@@ -62,7 +72,7 @@ export function createRulesRoutes({ db, fetchImpl }) {
       version: 1,
       exported_at: new Date().toISOString(),
       count: rows.length,
-      files: rows.map(({ host, filename, content, note }) => ({ host, filename, content, note })),
+      files: rows.map(({ host, filename, content, note, priority }) => ({ host, filename, content, note, priority })),
     };
     // 纯 ASCII 文件名，避免 Content-Disposition 编码兼容问题
     const stamp = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 14); // YYYYMMDDHHmmss

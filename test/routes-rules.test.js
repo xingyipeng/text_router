@@ -147,6 +147,40 @@ describe('POST /api/rules', () => {
     expect(body.inspect.hasCrlf).toBe(true);
     expect(body.inspect.hasLeadingWhitespace).toBe(true);
   });
+
+  it('空 host 保存为全局 *', async () => {
+    const res = await api('/api/rules', 'POST', { host: '', filename: 'g.txt', content: 'v' });
+    expect((await res.json()).host).toBe('*');
+  });
+
+  it('合法模式与优先级创建成功', async () => {
+    const res = await api('/api/rules', 'POST',
+      { host: '*.example.com', filename: 'x.txt', content: 'v', priority: 500 });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.host).toBe('*.example.com');
+    expect(body.priority).toBe(500);
+  });
+
+  it('非法模式返回 400', async () => {
+    for (const host of ['a*.example.com', '***.x.com', '*.example.com:8080']) {
+      const res = await api('/api/rules', 'POST', { host, filename: 'x.txt', content: 'v' });
+      expect(res.status, host).toBe(400);
+    }
+  });
+
+  it('单独 ** 归一化为全局 *', async () => {
+    const res = await api('/api/rules', 'POST', { host: '**', filename: 'x.txt', content: 'v' });
+    expect((await res.json()).host).toBe('*');
+  });
+
+  it('priority 非法返回 400', async () => {
+    for (const priority of [-1, 1001, 1.5, '5']) {
+      const res = await api('/api/rules', 'POST',
+        { host: 'a.com', filename: `p${String(priority)}.txt`, content: 'v', priority });
+      expect(res.status, String(priority)).toBe(400);
+    }
+  });
 });
 
 describe('GET /api/rules', () => {
@@ -164,13 +198,13 @@ describe('GET /api/rules', () => {
   });
 
   it('按 host 过滤时包含全局记录', async () => {
-    await api('/api/rules', 'POST', { host: '', filename: 'g.txt', content: 'v' });
+    await api('/api/rules', 'POST', { host: '*', filename: 'g.txt', content: 'v' });
     const rows = await (await api('/api/rules?host=a.com')).json();
     expect(rows.map((r) => r.filename).sort()).toEqual(['g.txt', 'one.txt']);
   });
 
   it('only_global=1 只返回全局记录', async () => {
-    await api('/api/rules', 'POST', { host: '', filename: 'g.txt', content: 'v' });
+    await api('/api/rules', 'POST', { host: '*', filename: 'g.txt', content: 'v' });
     const rows = await (await api('/api/rules?only_global=1')).json();
     expect(rows.map((r) => r.filename)).toEqual(['g.txt']);
   });
@@ -260,7 +294,7 @@ describe('GET /api/rules/meta', () => {
   it('hosts 为活跃记录的去重域名（不含全局记录的空域名）', async () => {
     await api('/api/rules', 'POST', { host: 'b.com', filename: 'b.txt', content: 'v' });
     await api('/api/rules', 'POST', { host: 'a.com', filename: 'a.txt', content: 'v' });
-    await api('/api/rules', 'POST', { host: '', filename: 'g.txt', content: 'v' });
+    await api('/api/rules', 'POST', { host: '*', filename: 'g.txt', content: 'v' });
     const body = await (await api('/api/rules/meta')).json();
     expect(body.hosts).toEqual(['a.com', 'b.com']);
   });
@@ -339,7 +373,7 @@ describe('DELETE 与 restore', () => {
 describe('POST /api/rules/:id/check', () => {
   it('返回内部与外部两层结果', async () => {
     const f = await (await api('/api/rules', 'POST',
-      { host: '', filename: 'x.txt', content: 'v' })).json();
+      { host: '*', filename: 'x.txt', content: 'v' })).json();
     const res = await api(`/api/rules/${f.id}/check`, 'POST');
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -353,7 +387,7 @@ describe('POST /api/rules/:id/check', () => {
 
   it('全局记录被精确记录遮蔽时内部检查不通过', async () => {
     const g = await (await api('/api/rules', 'POST',
-      { host: '', filename: 'x.txt', content: 'g' })).json();
+      { host: '*', filename: 'x.txt', content: 'g' })).json();
     await api('/api/rules', 'POST', { host: 'a.com', filename: 'x.txt', content: 'e' });
     const body = await (await api(`/api/rules/${g.id}/check`, 'POST')).json();
     expect(body.internal.ok).toBe(false);
@@ -364,7 +398,7 @@ describe('POST /api/rules/:id/check', () => {
 describe('GET /api/rules/export', () => {
   it('导出 JSON：版本/数量/记录齐全，只含未删除记录', async () => {
     await api('/api/rules', 'POST', { host: 'a.com', filename: 'a.txt', content: 'va', note: '甲' });
-    await api('/api/rules', 'POST', { host: '', filename: 'g.txt', content: 'vg' });
+    await api('/api/rules', 'POST', { host: '*', filename: 'g.txt', content: 'vg', note: '', priority: 0 });
     const del = await (await api('/api/rules', 'POST',
       { host: 'b.com', filename: 'b.txt', content: 'vb' })).json();
     await api(`/api/rules/${del.id}`, 'DELETE');
@@ -378,8 +412,8 @@ describe('GET /api/rules/export', () => {
     expect(body.exported_at).toBeTruthy();
     expect(body.count).toBe(2);
     expect(body.files).toEqual(expect.arrayContaining([
-      { host: 'a.com', filename: 'a.txt', content: 'va', note: '甲' },
-      { host: '', filename: 'g.txt', content: 'vg', note: '' },
+      { host: 'a.com', filename: 'a.txt', content: 'va', note: '甲', priority: 0 },
+      { host: '*', filename: 'g.txt', content: 'vg', note: '', priority: 0 },
     ]));
   });
 
@@ -479,5 +513,33 @@ describe('POST /api/rules/import', () => {
 
   it('未登录 401', async () => {
     expect((await anon('/api/rules/import', 'POST', { mode: 'skip', files: [] })).status).toBe(401);
+  });
+
+  it('旧格式（无 priority）默认 0，新格式写入 priority', async () => {
+    const res = await api('/api/rules/import', 'POST', {
+      mode: 'skip',
+      files: [
+        { host: 'a.com', filename: 'old.txt', content: 'o' },           // 旧格式
+        { host: 'b.com', filename: 'new.txt', content: 'n', priority: 9 }, // 新格式
+      ],
+    });
+    expect(res.status).toBe(200);
+    const rows = await (await api('/api/rules')).json();
+    expect(rows.find((r) => r.filename === 'old.txt').priority).toBe(0);
+    expect(rows.find((r) => r.filename === 'new.txt').priority).toBe(9);
+  });
+
+  it('非法模式进 errors，不影响其余导入', async () => {
+    const res = await api('/api/rules/import', 'POST', {
+      mode: 'skip',
+      files: [
+        { host: 'a*.example.com', filename: 'bad.txt', content: 'x' },
+        { host: 'a.com', filename: 'ok.txt', content: 'ok' },
+      ],
+    });
+    const body = await res.json();
+    expect(body.imported).toBe(1);
+    expect(body.errors).toHaveLength(1);
+    expect(body.errors[0].reason).toContain('域名模式');
   });
 });
