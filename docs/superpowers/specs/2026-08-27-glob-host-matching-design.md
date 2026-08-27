@@ -16,6 +16,7 @@
 3. 保存时前后端双重校验，非法模式即时报错。
 4. 附带：看板 24 小时趋势图增加 Y 轴刻度尺与数据点数值。
 5. 规则列表支持对**当前筛选结果**一键批量完整自检（内部 + 外部），逐行展示结果。
+6. 回收站支持**单条彻底删除**与**一键清空**。
 
 ## 2. 非目标（YAGNI）
 
@@ -112,12 +113,16 @@ UPDATE verify_files SET host = '*' WHERE host = '';  -- 存量全局记录一次
 - `listFiles` 筛选升级为业务语义：选某域名时显示**该域名会命中的全部规则**——SQL 取 `host = ?` 与含 `*` 的行（`host LIKE '%*%'`），JS 按 `matchHost` 过滤。
 - `listMeta.hosts` 只列精确域名（排除含 `*` 的行），模式不进下拉。
 - `onlyGlobal` 语义改为 `host = '*'`。
+- 新增 `hardDeleteFile(db, id)`：`DELETE FROM verify_files WHERE id = ? AND deleted_at IS NOT NULL`（仅回收站中的行可被彻底删除），返回删除数。
+- 新增 `clearTrash(db)`：`DELETE FROM verify_files WHERE deleted_at IS NOT NULL`，返回删除数。
 
 ### 5.3 `src/routes/rules.js`
 
 - `parsePayload`：host 走 `normalizePattern`，priority 走 `isValidPriority`，非法返回 400 中文错误；缺省 priority 补 0。
 - 导出文件每条增加 `priority` 字段。
 - 导入复用 `parsePayload` 校验；旧格式（无 priority）默认 0，向后兼容。
+- 新增 `DELETE /:id/permanent`：彻底删除（不可恢复）。记录不存在或未在回收站（`deleted_at` 为空）返回 404，成功 204。
+- 新增 `POST /trash/clear`：清空回收站，返回 `{count}`。两条路由注册在 `/:id` 之前。
 
 ### 5.4 `src/selfcheck.js`
 
@@ -158,6 +163,13 @@ UPDATE verify_files SET host = '*' WHERE host = '';  -- 存量全局记录一次
 - **数据点数值**：每个 count > 0 的点上方标 9px 小字数值；零点不标（贴着轴线会与时间标签打架）；末尾点圆点标记保留。
 - 新增 CSS 类 `trend-y-label`、`trend-point-label`。
 
+### 6.4 回收站（`public/index.html` + `public/rules.js`）
+
+- 回收站面板增加工具栏：「清空回收站」按钮（danger 样式）。
+- 每行「恢复」旁增加「彻底删除」按钮（danger），点击 → 确认对话框（「彻底删除后无法恢复」）→ `DELETE /api/rules/:id/permanent` → toast「已彻底删除」→ `loadTrash()`。
+- 清空回收站点击 → 确认对话框（「将彻底删除回收站中全部 N 条记录，无法恢复」）→ `POST /api/rules/trash/clear` → toast「已清空回收站」→ `loadTrash()`。
+- 回收站为空时禁用「清空回收站」按钮。
+
 ## 7. 保存时双重验证
 
 - **后端（权威）**：`normalizePattern` + `isValidPriority`，非法 400。新建、编辑、导入三条路径共用同一套校验。
@@ -174,8 +186,8 @@ UPDATE verify_files SET host = '*' WHERE host = '';  -- 存量全局记录一次
 | 文件 | 覆盖 |
 |------|------|
 | `test/hostmatch.test.js`（新增） | matchHost（精确/`*` 单层/`**` 多层与 0 层/全局/空 host）、patternIntersects（含 `**` 相交用例）、compareRules（priority/具体度/id 三级，具体度含 `*` 与 `**` 分层）、normalizePattern（空→*、单独 `**`→*、非法模式拒绝、大小写/尾点归一化）、isValidPriority |
-| `test/repo-rules.test.js`（更新） | matchFile 模式命中、优先级覆盖、同优先级具体度兜底；listFiles 筛选业务语义（模式行出现在命中域名筛选中）；onlyGlobal 用 `*`；listMeta 排除模式 |
-| `test/routes-rules.test.js`（更新） | parsePayload：空 host → `*`、非法模式 400、priority 越界/非整数 400；导出含 priority；旧格式导入默认 0 |
+| `test/repo-rules.test.js`（更新） | matchFile 模式命中、优先级覆盖、同优先级具体度兜底；listFiles 筛选业务语义（模式行出现在命中域名筛选中）；onlyGlobal 用 `*`；listMeta 排除模式；hardDeleteFile 只删回收站行/活动行删不掉；clearTrash 计数 |
+| `test/routes-rules.test.js`（更新） | parsePayload：空 host → `*`、非法模式 400、priority 越界/非整数 400；导出含 priority；旧格式导入默认 0；permanent 删除成功/活动行 404/不存在 404；trash/clear 计数 |
 | `test/selfcheck.test.js`（更新） | 模式规则 NO_HOST；遮蔽检测（模式被精确遮蔽、被高优先级全局遮蔽、低优先级不提示） |
 | `test/stats.test.js`（更新） | global 统计 `*`；byDomain 排除模式 |
 | 迁移测试 | 旧库（无 priority 列、host=''）openDb 后：列存在、host 变 `*`、行为等价 |
@@ -211,9 +223,22 @@ UPDATE verify_files SET host = '*' WHERE host = '';  -- 存量全局记录一次
 
 ## 12. 帮助文档与入口
 
-- 新增顶层帮助文档 `docs/规则配置.md`（帮助面板自动渲染 docs/ 下 .md，无需注册）：
+- 新增顶层帮助文档（帮助面板自动渲染 docs/ 下 .md，无需注册）。文件名必须是 ASCII（`docs.js` 的 `DOC_ID_RE` 拒绝中文 id），定为 `docs/rules-guide.md`，标题 `# 规则配置说明`：
   - host 匹配语法：精确域名、`*`（单层）、`**`（任意层含 0 层）、全局 `*`，各配例子
   - 优先级：排序次序（priority → 具体度 → 先建）、默认 0、范围 0~1000
   - 保存校验规则与常见错误示例
   - 单条自检与批量自检用法、结果代码含义（对齐 `CHECK_HINTS`）
 - `public/help.js` 增加 `openHelpDoc(id)`：切换到帮助面板、定位并打开指定文档；规则对话框的「?」链接调用它。
+
+## 13. 回收站管理
+
+彻底删除是不可逆操作，不做可恢复的第二层保险；依赖前端确认对话框把关。
+
+| 层级 | 改动 |
+|------|------|
+| repo | `hardDeleteFile(db, id)`：仅当 `deleted_at IS NOT NULL` 时物理删除，返回删除行数（活动行 0 行）；`clearTrash(db)`：物理删除全部回收站行，返回删除行数 |
+| 路由 | `DELETE /api/rules/:id/permanent`：记录不存在或未删除 → 404；成功 204。`POST /api/rules/trash/clear` → `{count}`。均注册在 `/:id` 之前 |
+| UI | 回收站面板加工具栏「清空回收站」（danger）；每行加「彻底删除」（danger）；两个操作均走 `confirmDialog`；操作后 `loadTrash()` 刷新；回收站为空时禁用清空按钮 |
+| 测试 | 见 §9（repo 与 routes 两行） |
+
+安全边界：彻底删除只作用于 `deleted_at IS NOT NULL` 的行，活动规则不会被误删；清空回收站同理，活跃数据不受影响。
