@@ -30,6 +30,8 @@ export function createVerifyHandler({ db, requestLog }) {
       filename,
       hit: Boolean(row),
       fileId: row ? row.id : null,
+      // 网关通常做了 HTTPS 终结，后端只见 http；以 x-forwarded-proto 还原真实协议
+      scheme: (c.req.header('x-forwarded-proto') || '').split(',')[0].trim() || 'http',
     });
 
     if (!row) return c.body('Not found', 404, TEXT_HEADERS);

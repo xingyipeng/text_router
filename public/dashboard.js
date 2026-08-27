@@ -15,6 +15,7 @@ async function loadDashboard() {
     renderTrend(s.requests.byHour);
     renderMainDomains(s.files.byMainDomain);
     renderRuleHosts(s.files.byRuleHost);
+    renderRecent(s.requests.recent);
   } finally {
     // 数据就绪后关闭骨架微光（纯展示）
     panel.classList.add('loaded');
@@ -29,7 +30,8 @@ function renderTrend(hours) {
   svg.toggleAttribute('hidden', !hasData);
   if (!hasData) return;
 
-  const W = 600, H = 300, PL = 40, PR = 10, PT = 14, AXIS = 24; // 左侧刻度区 40px
+  // PT 顶部留白：给最高点的数值标签留出空间，标签始终画在点上方
+  const W = 600, H = 300, PL = 40, PR = 10, PT = 26, AXIS = 24; // 左侧刻度区 40px
   const innerW = W - PL - PR;
   const rawMax = Math.max(...hours.map((h) => h.count), 1);
   // 1/2/2.5/5 × 10^k 步进取整刻度（如最大值 7 → 刻度 0/2/4/6/8）
@@ -52,16 +54,20 @@ function renderTrend(hours) {
       : `<line class="trend-grid" x1="${PL}" y1="${gy}" x2="${W - PR}" y2="${gy}"/>
          <text x="${PL - 6}" y="${gy}" class="trend-y-label" dy="0.32em">${val}</text>`;
   }).join('');
-  const labels = hours
-    .filter((_, i) => i % 6 === 0)
-    .map((h, i) =>
-      `<text x="${x(i * 6).toFixed(1)}" y="${H - 7}" class="trend-label">${h.hour}:00</text>`)
-    .join('');
-  // 数据点数值：count > 0 的点上方标小字（零点贴着轴线不标）
+  // 横轴刻度：每 6 小时一个，末尾补当前小时（右对齐防溢出），小时补零对齐宽度
+  const xLabelIdx = [0, 6, 12, 18, hours.length - 1];
+  const labels = xLabelIdx.map((i) => {
+    const anchor = i === hours.length - 1 ? ' text-anchor="end"' : '';
+    const hh = String(hours[i].hour).padStart(2, '0');
+    return `<text x="${x(i).toFixed(1)}" y="${H - 7}" class="trend-label"${anchor}>${hh}:00</text>`;
+  }).join('');
+  // 数据点数值：count > 0 的点正上方标小字（PT 留白保证最高点也不越界）
   const pointLabels = hours
-    .map((h, i) => h.count > 0
-      ? `<text x="${x(i).toFixed(1)}" y="${(y(h.count) - 6).toFixed(1)}" class="trend-point-label" text-anchor="middle">${h.count}</text>`
-      : '')
+    .map((h, i) => {
+      if (h.count <= 0) return '';
+      const py = y(h.count) - 8;
+      return `<text x="${x(i).toFixed(1)}" y="${py.toFixed(1)}" class="trend-point-label" text-anchor="middle">${h.count}</text>`;
+    })
     .join('');
   const last = pts[pts.length - 1];
 
@@ -127,6 +133,26 @@ function renderMainDomains(rows) {
     </div>`;
 }
 
+// 看板底部预览：最新几条请求（完整列表在「请求记录」页）
+function renderRecent(rows) {
+  const box = $('#dash-recent-list');
+  if (!rows.length) {
+    box.innerHTML = '<p class="empty">暂无请求，微信后台校验时会实时出现</p>';
+    return;
+  }
+  const pad = (n) => String(n).padStart(2, '0');
+  box.innerHTML = rows.map((r) => {
+    const d = new Date(r.at);
+    const time = `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    return `
+      <div class="recent-row">
+        <span class="recent-time">${time}</span>
+        <span class="recent-url mono" title="${escapeHtml(r.url)}">${escapeHtml(r.url)}</span>
+        <span class="recent-badge ${r.hit ? 'hit' : 'miss'}">${r.hit ? '命中' : '未命中'}</span>
+      </div>`;
+  }).join('');
+}
+
 // 按规则视图：域名按原样列出（含通配模式），一条不隐藏
 function renderRuleHosts(rows) {
   const box = $('#dash-rule-hosts');
@@ -145,4 +171,8 @@ function renderRuleHosts(rows) {
 
 document.addEventListener('tab:show', (e) => {
   if (e.detail === 'dashboard') loadDashboard();
+});
+
+$('#btn-recent-all').addEventListener('click', () => {
+  location.hash = '#/requests';
 });

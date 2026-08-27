@@ -526,10 +526,37 @@ dz.addEventListener('drop', async (e) => {
 // —— 规则 JSON 导入 ——
 // 导出是纯下载链接（index.html 里的 <a href="/api/rules/export" download>），无需 JS。
 
+// 拖拽的文件无法写入 <input type="file">（安全限制），单独存变量，提交时优先使用
+let importFile = null;
+
+function setImportFileName(file) {
+  importFile = file;
+  const nameEl = $('#import-file-name');
+  nameEl.textContent = file.name;
+  nameEl.hidden = false;
+}
+
+const impDz = $('#import-dropzone');
+['dragenter', 'dragover'].forEach((ev) =>
+  impDz.addEventListener(ev, (e) => { e.preventDefault(); impDz.classList.add('over'); }));
+['dragleave', 'drop'].forEach((ev) =>
+  impDz.addEventListener(ev, (e) => { e.preventDefault(); impDz.classList.remove('over'); }));
+impDz.addEventListener('drop', (e) => {
+  const file = e.dataTransfer.files[0];
+  if (!file) return;
+  if (!file.name.toLowerCase().endsWith('.json')) return toast('请拖入 .json 文件');
+  setImportFileName(file);
+});
+$('#rules-import-file').addEventListener('change', (e) => {
+  if (e.target.files[0]) setImportFileName(e.target.files[0]);
+});
+
 $('#btn-rules-import').addEventListener('click', () => {
   $('#rules-import-error').textContent = '';
   $('#rules-import-result').hidden = true;
   $('#rules-import-file').value = '';
+  importFile = null;
+  $('#import-file-name').hidden = true;
   const submitBtn = $('#rules-import-form button[value="save"]');
   submitBtn.type = 'submit';
   submitBtn.textContent = '开始导入';
@@ -543,7 +570,7 @@ $('#rules-import-form button[value="save"]').addEventListener('click', (e) => {
 
 $('#rules-import-form').addEventListener('submit', async (e) => {
   e.preventDefault();
-  const file = $('#rules-import-file').files[0];
+  const file = importFile || $('#rules-import-file').files[0];
   const errEl = $('#rules-import-error');
   const resultEl = $('#rules-import-result');
   errEl.textContent = '';

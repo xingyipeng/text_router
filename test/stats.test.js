@@ -128,6 +128,26 @@ describe('computeStats', () => {
     expect(s.requests.byHour.reduce((a, h) => a + h.count, 0)).toBe(5);
     expect(s.requests.byHour[23].count).toBe(5);
   });
+
+  it('最近请求：最新在前、最多 5 条，拼成完整 URL', () => {
+    const log = createRequestLog();
+    for (let i = 0; i < 7; i++) {
+      log.record({ host: 'h.com', resolvedHost: 'r.com', path: `/${i}.txt`, hit: i % 2 === 0 });
+    }
+    const s = computeStats(db, log);
+    expect(s.requests.recent).toHaveLength(5);
+    expect(s.requests.recent[0]).toEqual({
+      at: expect.any(Number), url: 'http://r.com/6.txt', hit: true,
+    });
+    expect(s.requests.recent[4].url).toBe('http://r.com/2.txt');
+  });
+
+  it('最近请求：scheme 取记录值，无 resolvedHost 时回退 host', () => {
+    const log = createRequestLog();
+    log.record({ host: 'h.com', path: '/x.txt', hit: false, scheme: 'https' });
+    const s = computeStats(db, log);
+    expect(s.requests.recent[0].url).toBe('https://h.com/x.txt');
+  });
 });
 
 describe('GET /api/stats', () => {

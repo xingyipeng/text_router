@@ -211,6 +211,14 @@
           </div>
         </div>
         <p class="hint">请求统计来自内存记录，服务重启后清零；路由统计来自数据库。</p>
+        <div class="dash-panel dash-recent">
+          <h2>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+            最近请求
+            <button type="button" id="btn-recent-all" class="btn link">查看全部</button>
+          </h2>
+          <div id="dash-recent-list"></div>
+        </div>
       </div>
 
       <div id="panel-rules" class="panel">
@@ -218,7 +226,7 @@
           <select id="r-host" aria-label="按域名筛选"><option value="">全部域名</option></select>
           <span class="search-box">
             <svg class="search-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.3-4.3"/></svg>
-            <input id="r-q" placeholder="搜索文件名、备注或内容">
+            <input id="r-q" placeholder="搜索路径、备注或内容">
             <button type="button" class="clear-btn" data-clear="q" hidden aria-label="清除搜索">×</button>
           </span>
           <select id="r-by"><option value="">全部操作人</option></select>
@@ -469,6 +477,7 @@
     <label>用户名 <input name="username" required placeholder="登录用户名"></label>
     <label>显示名 <input name="display_name" placeholder="便于识别的名字"></label>
     <label>初始密码 <input name="password" type="password" required minlength="8"></label>
+    <label>确认密码 <input name="confirm_password" type="password" required minlength="8"></label>
     <p class="error" id="user-error"></p>
     <menu>
       <button value="cancel" type="button" id="user-cancel" class="btn">取消</button>
@@ -493,8 +502,11 @@
 <dialog id="rules-import-dialog">
   <form id="rules-import-form" method="dialog" class="dialog-form">
     <h2>导入规则</h2>
-    <label>选择导出的 JSON 文件
-      <input type="file" id="rules-import-file" accept=".json,application/json" required>
+    <label id="import-dropzone" for="rules-import-file">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M17 8l-5-5-5 5"/><path d="M12 3v12"/></svg>
+      <p>把导出的 <b>.json</b> 文件拖到这里，或点击选择</p>
+      <span id="import-file-name" class="import-file-name" hidden></span>
+      <input type="file" id="rules-import-file" accept=".json,application/json" required hidden>
     </label>
     <p class="hint">按「域名 + 文件名」与现有规则合并；文件里与现有规则重复的记录按下面策略处理</p>
     <label class="inline"><input type="radio" name="import-mode" value="skip" checked> 跳过重复（推荐）</label>

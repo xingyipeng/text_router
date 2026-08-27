@@ -78,6 +78,12 @@ export function computeStats(db, requestLog) {
       todayHits: today.filter((e) => e.hit).length,
       todayMisses: today.filter((e) => !e.hit).length,
       byHour,
+      // 看板底部预览：最新 5 条，拼成完整 URL（完整记录在请求记录页）
+      recent: entries.slice(0, 5).map((e) => ({
+        at: e.at,
+        url: `${e.scheme || 'http'}://${e.resolvedHost || e.host}${e.path}`,
+        hit: e.hit,
+      })),
     },
   };
 }

@@ -245,6 +245,13 @@ describe('请求记录', () => {
     expect(e.resolvedHost).toBe('real.com');
   });
 
+  it('记录协议：优先 x-forwarded-proto，缺省 http', async () => {
+    await get('/x.txt', 'a.com', { 'x-forwarded-proto': 'https' });
+    expect(requestLog.list()[0].scheme).toBe('https');
+    await get('/x.txt');
+    expect(requestLog.list()[0].scheme).toBe('http');
+  });
+
   it('非 .txt 未命中不记录（静态资源不刷屏），.txt 未命中仍记录', async () => {
     await get('/missing.txt');
     await get('/style.css');

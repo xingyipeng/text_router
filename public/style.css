@@ -335,21 +335,20 @@ label.inline input[type="number"] { border: none; padding: 4px 8px; }
 .top-links .icon-btn {
   width: 34px; height: 34px; border-radius: 50%;
   display: grid; place-items: center;
-  border: 1px solid var(--border);
+  border: 0;
   background: var(--surface);
   color: var(--text-2);
-  transition: color .16s ease, border-color .16s ease, transform .16s ease, box-shadow .16s ease;
+  transition: color .16s ease, transform .16s ease, box-shadow .16s ease;
 }
 .top-links .icon-btn:hover {
   color: var(--primary);
-  border-color: var(--primary);
   transform: translateY(-1px);
   box-shadow: var(--shadow);
 }
-.top-links .tab.active { color: var(--primary); border-color: var(--primary); }
+.top-links .tab.active { color: var(--primary); }
 .top-links .icon-btn svg { width: 17px; height: 17px; }
 
-main { padding: 24px 28px 56px; max-width: 1500px; width: 100%; margin: 0 auto; }
+main { flex: 1; display: flex; flex-direction: column; padding: 24px 28px 24px; max-width: 1500px; width: 100%; margin: 0 auto; }
 .panel { animation: panelIn .28s ease; }
 
 @keyframes panelIn { from { opacity: 0; transform: translateY(6px); } }
@@ -358,6 +357,8 @@ main { padding: 24px 28px 56px; max-width: 1500px; width: 100%; margin: 0 auto; 
 /* ============================================================
    看板
    ============================================================ */
+/* 看板撑满视口高度：面板列纵向铺开，最近请求吸收剩余空间 */
+#panel-dashboard:not([hidden]) { flex: 1; display: flex; flex-direction: column; }
 .dash-cards {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(205px, 1fr));
   gap: 14px; margin-bottom: 16px;
@@ -447,6 +448,28 @@ main { padding: 24px 28px 56px; max-width: 1500px; width: 100%; margin: 0 auto; 
 }
 #dash-rule-hosts { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--border); }
 .domain-subtitle { font-size: 12px; font-weight: 600; color: var(--text-2); margin: 0 0 8px; }
+
+/* 最近请求预览 */
+.dash-recent { flex: 1; justify-content: flex-start; margin-top: 14px; min-height: 0; padding: 14px 20px 10px; }
+.dash-recent h2 { margin-bottom: 8px; }
+#btn-recent-all { margin-left: auto; }
+#dash-recent-list .empty { margin: 8px 0 2px; padding: 10px 0; }
+#dash-recent-list .empty::before { display: none; }
+.recent-row {
+  display: grid;
+  grid-template-columns: 70px 1fr 68px;
+  gap: 12px; align-items: center;
+  padding: 5px 0; border-top: 1px solid #f1f4f9;
+  font-size: 12px; line-height: 1.4;
+}
+.recent-time { color: var(--text-3); font-variant-numeric: tabular-nums; }
+.recent-url { color: var(--text-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent-badge {
+  justify-self: end; font-size: 11px; font-weight: 600;
+  padding: 2px 10px; border-radius: 999px;
+}
+.recent-badge.hit { background: var(--ok-bg); color: var(--ok); }
+.recent-badge.miss { background: var(--bad-bg); color: var(--bad); }
 
 /* ============================================================
    工具栏 & 表格卡片
@@ -643,21 +666,27 @@ dialog menu .btn { min-width: 72px; }
 }
 
 /* 拖拽导入区 */
-#dropzone {
+#dropzone, #import-dropzone {
   display: flex; flex-direction: column; align-items: center; gap: 10px;
   padding: 22px 16px; text-align: center;
   border: 1.5px dashed var(--border-strong); border-radius: 12px;
   background: #fafbfe; color: var(--text-2); font-size: 12.5px;
   transition: border-color .18s ease, background .18s ease, transform .18s ease;
+  cursor: pointer;
 }
-#dropzone svg { width: 26px; height: 26px; color: var(--text-3); }
-#dropzone p { margin: 0; }
-#dropzone b { color: var(--text-2); }
-#dropzone.over {
+#dropzone svg, #import-dropzone svg { width: 26px; height: 26px; color: var(--text-3); }
+#dropzone p, #import-dropzone p { margin: 0; }
+#dropzone b, #import-dropzone b { color: var(--text-2); }
+#dropzone.over, #import-dropzone.over {
   border-color: var(--primary); background: var(--primary-wash); color: var(--primary);
   transform: scale(1.012);
 }
-#dropzone.over svg, #dropzone.over b { color: var(--primary); }
+#dropzone.over svg, #dropzone.over b,
+#import-dropzone.over svg, #import-dropzone.over b { color: var(--primary); }
+#import-dropzone .import-file-name {
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 12px; font-weight: 600; color: var(--primary);
+}
 
 /* ============================================================
    Toast
@@ -824,7 +853,7 @@ dialog menu .btn { min-width: 72px; }
 
 /* 趋势图 Y 轴刻度与数据点数值 */
 .trend-y-label { fill: var(--text-3); font-size: 10px; text-anchor: end; }
-.trend-point-label { fill: var(--text-2); font-size: 9px; }
+.trend-point-label { fill: var(--primary); font-size: 9.5px; font-weight: 600; }
 
 /* 批量自检 */
 .btn .batch-progress { margin-left: 6px; font-variant-numeric: tabular-nums; }
