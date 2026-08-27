@@ -402,13 +402,16 @@ main { padding: 24px 28px 56px; max-width: 1500px; width: 100%; margin: 0 auto; 
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 14px; padding: 18px 20px; box-shadow: var(--shadow-sm);
   min-height: 260px;
+  display: flex; flex-direction: column;
+  justify-content: space-between;
 }
 .dash-panel h2 {
   display: flex; align-items: center; gap: 8px;
   font-size: 13.5px; font-weight: 600; color: #15233a; margin-bottom: 14px;
 }
 .dash-panel h2 svg { width: 15px; height: 15px; color: var(--primary); }
-#dash-trend { width: 100%; height: 196px; display: block; }
+#dash-trend { width: 100%; height: 350px; display: block; }
+#dash-trend-empty { flex: 1; display: grid; place-items: center; margin: 0; }
 .trend-label { fill: var(--text-3); font-size: 10.5px; }
 .trend-grid { stroke: #eef1f6; stroke-width: 1; }
 
@@ -425,13 +428,13 @@ main { padding: 24px 28px 56px; max-width: 1500px; width: 100%; margin: 0 auto; 
 #panel-dashboard:not(.loaded) .dash-panel { opacity: .35; }
 
 /* 域名分布：环形图 + 图例 */
-.domain-chart { display: grid; grid-template-columns: 138px 1fr; gap: 8px; align-items: center; }
+.domain-chart { display: grid; grid-template-columns: 154px 1fr; gap: 8px; align-items: center; }
 .domain-donut { display: grid; place-items: center; }
 .domain-donut svg { animation: donutIn .55s cubic-bezier(.16, 1, .3, 1); }
 @keyframes donutIn { from { opacity: 0; transform: scale(.9) rotate(-14deg); } }
 .donut-total { font-size: 21px; font-weight: 700; fill: #15233a; font-variant-numeric: tabular-nums; }
 .donut-cap { font-size: 10px; fill: var(--text-3); }
-.domain-legend { display: grid; gap: 7px; max-height: 176px; overflow-y: auto; padding-right: 4px; }
+.domain-legend { display: grid; gap: 7px; max-height: 200px; overflow-y: auto; padding-right: 4px; }
 .domain-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .domain-dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
 .domain-host {
@@ -613,11 +616,11 @@ dialog[open] { animation: dialogIn .24s cubic-bezier(.16, 1, .3, 1); }
 .dialog-form h2 { font-size: 18px; color: #15233a; padding-bottom: 14px;
   border-bottom: 1px solid var(--border); }
 .dialog-form label { gap: 7px; display: block; }
-.dialog-form label > .btn.link { vertical-align: middle; margin-left: 4px; }
+.field-head { display: flex; align-items: center; gap: 6px; margin-bottom: 7px; }
 .form-row { display: grid; grid-template-columns: 1fr 150px; gap: 12px; align-items: start; }
 .form-row .hint { display: block; margin-top: 4px; }
 .form-row .hint[hidden] { display: none; }
-#rule-dialog { width: min(560px, calc(100vw - 32px)); }
+#rule-dialog { width: min(660px, calc(100vw - 32px)); }
 .dialog-form input, .dialog-form textarea { padding: 10px 12px; border-radius: 10px; }
 .dialog-message { margin: 0; font-size: 13.5px; line-height: 1.7; color: var(--text-2); }
 dialog menu {

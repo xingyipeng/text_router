@@ -198,7 +198,7 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
               访问趋势（24 小时）
             </h2>
-            <svg id="dash-trend" viewBox="0 0 600 180" preserveAspectRatio="none"></svg>
+            <svg id="dash-trend" viewBox="0 0 600 300" preserveAspectRatio="none"></svg>
             <p class="empty" id="dash-trend-empty" hidden>暂无请求数据</p>
           </div>
           <div class="dash-panel">
@@ -417,14 +417,17 @@
       <p>把从微信后台下载的 <b>.txt</b> 文件拖到这里，自动填充</p>
     </div>
     <div class="form-row">
-      <label>域名
-        <button type="button" id="btn-host-help" class="btn link" title="查看规则配置说明">?</button>
-        <input name="host" placeholder="如 *.example.com；单独 * 表示所有域名">
+      <div class="field">
+        <div class="field-head">
+          <label for="rule-host">域名</label>
+          <button type="button" id="btn-host-help" class="btn link" title="查看规则配置说明">?</button>
+        </div>
+        <input id="rule-host" name="host" placeholder="如 *.example.com；单独 * 表示所有域名">
         <span class="hint" id="host-global-hint" hidden>留空将保存为全局 *（对所有域名生效）</span>
-      </label>
+      </div>
       <label>优先级
         <input name="priority" type="number" min="0" max="1000" step="1" placeholder="0~1000">
-        <span class="hint">数字越大越优先，多条规则冲突时才需要改（0-1000）</span>
+        <span class="hint">数字越大越优先</span>
       </label>
     </div>
     <label>路径

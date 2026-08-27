@@ -25,10 +25,11 @@ function renderTrend(hours) {
   const svg = $('#dash-trend');
   const hasData = hours.some((h) => h.count > 0);
   $('#dash-trend-empty').hidden = hasData;
-  svg.hidden = !hasData;
+  // SVG 元素没有 hidden IDL 属性，赋值只会挂一个 JS 属性，必须写 attribute
+  svg.toggleAttribute('hidden', !hasData);
   if (!hasData) return;
 
-  const W = 600, H = 180, PL = 40, PR = 10, PT = 14, AXIS = 24; // 左侧刻度区 40px
+  const W = 600, H = 300, PL = 40, PR = 10, PT = 14, AXIS = 24; // 左侧刻度区 40px
   const innerW = W - PL - PR;
   const rawMax = Math.max(...hours.map((h) => h.count), 1);
   // 1/2/2.5/5 × 10^k 步进取整刻度（如最大值 7 → 刻度 0/2/4/6/8）
@@ -108,7 +109,7 @@ function renderMainDomains(rows) {
   box.innerHTML = `
     <div class="domain-chart">
       <div class="domain-donut">
-        <svg viewBox="0 0 140 140" width="134" height="134" role="img" aria-label="主域名分布环形图">
+        <svg viewBox="0 0 140 140" width="150" height="150" role="img" aria-label="主域名分布环形图">
           <circle cx="70" cy="70" r="${R}" fill="none" stroke="#eef2f8" stroke-width="17"/>
           ${segs}
           <text x="70" y="66" text-anchor="middle" class="donut-total">${total}</text>
