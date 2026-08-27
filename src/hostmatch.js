@@ -14,6 +14,14 @@ export function isPattern(host) {
   return typeof host === 'string' && host.includes('*');
 }
 
+// 主域名（筛选下拉聚合用）：去掉通配标签后取最后两段，单段域名保持原样。
+// 注意：不特殊处理多段公共后缀（如 co.uk），按微信校验场景简化。
+export function mainDomain(host) {
+  const h = typeof host === 'string' ? host.toLowerCase() : '';
+  if (!h || h === '*') return '*';
+  return h.split('.').filter((l) => l !== '*' && l !== '**').slice(-2).join('.');
+}
+
 // 回溯标签比较；k 个 ** 对上 n 个标签最坏 C(n+k,k) 条路径，
 // 但模式与 host 标签数都很小（规则行数量级），无需记忆化
 function matchFrom(pi, hi, p, h) {

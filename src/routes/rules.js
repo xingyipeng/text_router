@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import {
-  createFile, updateFile, getFile, listFiles, softDeleteFile, restoreFile, hardDeleteFile,
+  createFile, updateFile, getFile, listFiles, softDeleteFile, softDeleteFiles, restoreFile, hardDeleteFile,
   clearTrash, listMeta, findActiveByHostFilename,
 } from '../repo/rules.js';
 import { UniqueViolation } from '../repo/errors.js';
@@ -152,6 +152,18 @@ export function createRulesRoutes({ db, fetchImpl }) {
     const job = getBatchCheck(c.req.param('id'));
     if (!job) return c.json({ error: '任务不存在或已过期' }, 404);
     return c.json(job);
+  });
+
+  // 注意：/batch-delete、/trash/clear 与 /:id/permanent 先于 /:id 系列注册，避免被参数路由吞掉
+  router.post('/batch-delete', async (c) => {
+    let body;
+    try { body = await c.req.json(); } catch { return c.json({ error: 'bad request' }, 400); }
+    const ids = body?.ids;
+    if (!Array.isArray(ids) || ids.length === 0 || ids.some((v) => !Number.isInteger(v) || v <= 0)) {
+      return c.json({ error: 'ids 必须是非空正整数数组' }, 400);
+    }
+    if (ids.length > 500) return c.json({ error: '一次最多删除 500 条' }, 400);
+    return c.json({ count: softDeleteFiles(db, ids, c.get('user').id) });
   });
 
   // 注意：/trash/clear 与 /:id/permanent 先于 /:id 系列注册，避免被参数路由吞掉

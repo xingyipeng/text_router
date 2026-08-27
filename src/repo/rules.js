@@ -1,6 +1,6 @@
 import { wrapUnique } from './errors.js';
 import { listUsers } from './users.js';
-import { matchHost, compareRules } from '../hostmatch.js';
+import { matchHost, compareRules, mainDomain } from '../hostmatch.js';
 
 const SELECT_WITH_USERS = `
   SELECT f.*,
@@ -48,6 +48,20 @@ export function softDeleteFile(db, id, userId) {
   return getFile(db, id);
 }
 
+// 批量软删除（移入回收站）：返回实际删除的行数，只计活动行，已删除/不存在的忽略
+export function softDeleteFiles(db, ids, userId) {
+  const now = Date.now();
+  const stmt = db.prepare(`
+    UPDATE verify_files SET deleted_at = ?, deleted_by = ?
+    WHERE id = ? AND deleted_at IS NULL
+  `);
+  return db.transaction(() => {
+    let n = 0;
+    for (const id of ids) n += stmt.run(now, userId, id).changes;
+    return n;
+  })();
+}
+
 export function restoreFile(db, id, userId) {
   wrapUnique(() =>
     db.prepare(`
@@ -73,14 +87,15 @@ export function clearTrash(db) {
 }
 
 // 筛选器元数据：活跃域名（含删除记录中的域名会被隐藏）与操作人。
+// 域名下拉按主域名聚合：精确子域与通配模式都归入其主域名（如 *.naodu.com → naodu.com）。
 // 操作人 = 用户列表中状态正常的用户（与「用户」页一致），不随文件记录变化。
 export function listMeta(db) {
   const hosts = db.prepare(`
     SELECT DISTINCT host FROM verify_files
-    WHERE deleted_at IS NULL AND host != '' AND host NOT LIKE '%*%'
+    WHERE deleted_at IS NULL AND host != '' AND host != '*'
     ORDER BY host ASC
   `).all().map((r) => r.host);
-  return { hosts, persons: listUsers(db) };
+  return { hosts: [...new Set(hosts.map(mainDomain))].sort(), persons: listUsers(db) };
 }
 
 // 按 filename 查候选行 → JS 过滤模式命中 → 按 compareRules 排序取第一条。
@@ -126,10 +141,6 @@ export function listFiles(db, { host, q, by, sort = 'updated', dir, includeDelet
   if (onlyGlobal) {
     // 只看全局记录（*）
     where.push("f.host = '*'");
-  } else if (host !== undefined && host !== null && host !== '') {
-    // 业务语义：列出「该域名会命中的全部规则」——SQL 取精确行 + 模式行，JS 再精确过滤
-    where.push("(f.host = ? OR f.host LIKE '%*%')");
-    params.push(host);
   }
   if (q) {
     where.push("(f.filename LIKE ? ESCAPE '\\' OR f.note LIKE ? ESCAPE '\\' OR f.content LIKE ? ESCAPE '\\')");
@@ -146,7 +157,12 @@ export function listFiles(db, { host, q, by, sort = 'updated', dir, includeDelet
   const orderBy = s.expr.split(',').map((col) => `${col} ${direction}`).join(', ');
   let rows = db.prepare(`${SELECT_WITH_USERS} ${clause} ORDER BY ${orderBy}`).all(...params);
   if (!includeDeleted && !onlyGlobal && host !== undefined && host !== null && host !== '') {
-    rows = rows.filter((r) => matchHost(r.host === '' ? '*' : r.host, host));
+    // 主域名家族语义：带出该主域名下的全部规则（精确、子域、通配模式）；
+    // 全局记录不随域名带出（下拉有独立的「全局（*）」筛选）
+    rows = rows.filter((r) => {
+      const h = r.host === '' ? '*' : r.host;
+      return mainDomain(h) === mainDomain(host);
+    });
   }
   return rows;
 }

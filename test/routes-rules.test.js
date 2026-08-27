@@ -57,6 +57,42 @@ describe('鉴权', () => {
     expect((await anon('/api/rules')).status).toBe(401);
     expect((await anon('/api/rules', 'POST', {})).status).toBe(401);
     expect((await anon('/api/rules/1', 'DELETE')).status).toBe(401);
+    expect((await anon('/api/rules/batch-delete', 'POST', { ids: [1] })).status).toBe(401);
+  });
+});
+
+describe('POST /api/rules/batch-delete', () => {
+  it('批量删除选中的规则并返回删除数', async () => {
+    const a = await (await api('/api/rules', 'POST',
+      { host: 'a.com', filename: 'x.txt', content: 'v' })).json();
+    const b = await (await api('/api/rules', 'POST',
+      { host: 'b.com', filename: 'y.txt', content: 'v' })).json();
+    const res = await api('/api/rules/batch-delete', 'POST', { ids: [a.id, b.id] });
+    expect(res.status).toBe(200);
+    expect((await res.json()).count).toBe(2);
+    expect(await (await api('/api/rules')).json()).toHaveLength(0);
+    const trashed = await (await api('/api/rules?include_deleted=1')).json();
+    expect(trashed).toHaveLength(2);
+    expect(trashed[0].deleted_by_username).toBe('alice');
+  });
+
+  it('已删除或不存在的 id 不计入删除数', async () => {
+    const a = await (await api('/api/rules', 'POST',
+      { host: 'a.com', filename: 'x.txt', content: 'v' })).json();
+    await api(`/api/rules/${a.id}`, 'DELETE');
+    const res = await api('/api/rules/batch-delete', 'POST', { ids: [a.id, 9999] });
+    expect((await res.json()).count).toBe(0);
+  });
+
+  it('ids 非法时返回 400', async () => {
+    for (const body of [{}, { ids: [] }, { ids: [0] }, { ids: [1.5] }, { ids: ['1'] }, { ids: [1, 'x'] }]) {
+      expect((await api('/api/rules/batch-delete', 'POST', body)).status, JSON.stringify(body)).toBe(400);
+    }
+  });
+
+  it('超过 500 条返回 400', async () => {
+    const ids = Array.from({ length: 501 }, (_, i) => i + 1);
+    expect((await api('/api/rules/batch-delete', 'POST', { ids })).status).toBe(400);
   });
 });
 
@@ -212,10 +248,10 @@ describe('GET /api/rules', () => {
     expect(await (await api('/api/rules?host=a.com')).json()).toHaveLength(1);
   });
 
-  it('按 host 过滤时包含全局记录', async () => {
+  it('按 host 过滤时不包含全局记录', async () => {
     await api('/api/rules', 'POST', { host: '*', filename: 'g.txt', content: 'v' });
     const rows = await (await api('/api/rules?host=a.com')).json();
-    expect(rows.map((r) => r.filename).sort()).toEqual(['g.txt', 'one.txt']);
+    expect(rows.map((r) => r.filename).sort()).toEqual(['one.txt']);
   });
 
   it('only_global=1 只返回全局记录', async () => {

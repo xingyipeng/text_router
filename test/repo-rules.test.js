@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { openDb } from '../src/db.js';
 import {
   createFile, updateFile, getFile, listFiles, listMeta,
-  softDeleteFile, restoreFile, matchFile, hardDeleteFile, clearTrash,
+  softDeleteFile, softDeleteFiles, restoreFile, matchFile, hardDeleteFile, clearTrash,
 } from '../src/repo/rules.js';
 import { UniqueViolation } from '../src/repo/errors.js';
 
@@ -153,6 +153,27 @@ describe('hardDeleteFile / clearTrash', () => {
   });
 });
 
+describe('softDeleteFiles', () => {
+  it('批量软删除活动行并返回删除数', () => {
+    const a = createFile(db, { host: 'a.com', filename: 'x.txt', content: 'v', userId: 1 });
+    const b = createFile(db, { host: 'b.com', filename: 'y.txt', content: 'v', userId: 1 });
+    const keep = createFile(db, { host: 'c.com', filename: 'z.txt', content: 'v', userId: 1 });
+    expect(softDeleteFiles(db, [a.id, b.id], 9)).toBe(2);
+    expect(getFile(db, a.id).deleted_by).toBe(9);
+    expect(getFile(db, b.id).deleted_at).toBeGreaterThan(0);
+    expect(getFile(db, keep.id).deleted_at).toBeNull();
+    expect(matchFile(db, 'a.com', 'x.txt')).toBeUndefined();
+    expect(matchFile(db, 'c.com', 'z.txt').content).toBe('v');
+  });
+
+  it('已删除或不存在的 id 不计入删除数', () => {
+    const a = createFile(db, { host: 'a.com', filename: 'x.txt', content: 'v', userId: 1 });
+    softDeleteFile(db, a.id, 1);
+    const b = createFile(db, { host: 'b.com', filename: 'y.txt', content: 'v', userId: 1 });
+    expect(softDeleteFiles(db, [a.id, b.id, 9999], 9)).toBe(1);
+  });
+});
+
 describe('softDeleteFile', () => {
   it('记录仍在库中，带删除人', () => {
     const f = createFile(db, { host: 'a.com', filename: 'x.txt', content: 'v1', note: '', userId: 1 });
@@ -230,10 +251,10 @@ describe('listFiles', () => {
     expect(listFiles(db, { host: 'a.com' })).toHaveLength(1);
   });
 
-  it('按 host 过滤时包含全局记录（*）', () => {
+  it('按 host 过滤时不包含全局记录（全局记录走 onlyGlobal 筛选）', () => {
     createFile(db, { host: '*', filename: 'g.txt', content: 'v', userId: 1 });
-    const rows = listFiles(db, { host: 'a.com' });
-    expect(rows.map((r) => r.filename).sort()).toEqual(['g.txt', 'one.txt']);
+    expect(listFiles(db, { host: 'a.com' }).map((r) => r.filename)).toEqual(['one.txt']);
+    expect(listFiles(db, { onlyGlobal: true }).map((r) => r.filename)).toEqual(['g.txt']);
   });
 
   it('onlyGlobal 只返回全局记录', () => {
@@ -241,12 +262,18 @@ describe('listFiles', () => {
     expect(listFiles(db, { onlyGlobal: true }).map((r) => r.filename)).toEqual(['g.txt']);
   });
 
-  it('按 host 过滤时包含会命中的模式行，排除不命中的', () => {
+  it('按 host 过滤：带出该主域名的精确、子域与通配规则，排除其他主域名', () => {
     createFile(db, { host: '*.a.com', filename: 'p.txt', content: 'v', userId: 1 });
+    createFile(db, { host: 'x.a.com', filename: 's.txt', content: 'v', userId: 1 });
     createFile(db, { host: '*.b.com', filename: 'q.txt', content: 'v', userId: 1 });
+    const rows = listFiles(db, { host: 'a.com' });
+    expect(rows.map((r) => r.filename).sort()).toEqual(['one.txt', 'p.txt', 's.txt']);
+  });
+
+  it('按具体子域名过滤等价于其主域名家族', () => {
+    createFile(db, { host: '*.a.com', filename: 'p.txt', content: 'v', userId: 1 });
     const rows = listFiles(db, { host: 'x.a.com' });
-    // one.txt 的 host 是精确域名 a.com，不命中 x.a.com，不在结果中
-    expect(rows.map((r) => r.filename).sort()).toEqual(['p.txt']);
+    expect(rows.map((r) => r.filename).sort()).toEqual(['one.txt', 'p.txt']);
   });
 
   it('按 q 搜索文件名与备注', () => {
@@ -300,11 +327,13 @@ describe('listMeta', () => {
     expect(listMeta(db).hosts).toEqual(['a.com', 'b.com']);
   });
 
-  it('hosts 排除通配模式行', () => {
+  it('hosts 把通配模式与子域聚合为主域名，排除全局记录', () => {
     createFile(db, { host: '*.a.com', filename: 'p.txt', content: 'v', userId: 1 });
+    createFile(db, { host: 'x.a.com', filename: 's.txt', content: 'v', userId: 1 });
+    createFile(db, { host: '*.b.com', filename: 'q.txt', content: 'v', userId: 1 });
     createFile(db, { host: '*', filename: 'g.txt', content: 'v', userId: 1 });
     createFile(db, { host: 'a.com', filename: 'a.txt', content: 'v', userId: 1 });
-    expect(listMeta(db).hosts).toEqual(['a.com']);
+    expect(listMeta(db).hosts).toEqual(['a.com', 'b.com']);
   });
 
   it('已删除记录的唯一域名不出现在 hosts 里', () => {

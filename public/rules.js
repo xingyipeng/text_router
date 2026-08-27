@@ -5,6 +5,8 @@ const filters = { host: '', q: '', by: '', sort: 'updated', dir: 'desc' };
 // 各排序键的默认方向：时间类默认新→旧，文本类默认 A→Z
 const SORT_DEFAULT_DIRS = { updated: 'desc', created: 'desc', host: 'asc', filename: 'asc', created_by: 'asc' };
 let editingId = null;
+// 批量删除勾选：Set 存规则 id，每次重载列表清空（勾选只作用于当前列表）
+const selected = new Set();
 // 筛选器元数据：全部现有域名与全部操作人（来自 /api/rules/meta，独立于当前筛选结果）
 let meta = { hosts: [], persons: [] };
 
@@ -54,6 +56,7 @@ async function loadMeta() {
 function renderRules(rows) {
   const tbody = $('#rules-table tbody');
   tbody.innerHTML = '';
+  selected.clear();
   $('#panel-rules .empty').hidden = rows.length > 0;
   $('#r-count').textContent = rows.length ? `共 ${rows.length} 条` : '';
 
@@ -76,8 +79,21 @@ function renderRules(rows) {
       </td>`;
     tr.dataset.id = r.id;
     tr.dataset.row = JSON.stringify(r);
+    const selTd = document.createElement('td');
+    selTd.className = 'col-check';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.checked = selected.has(r.id);
+    cb.title = '选择此条';
+    cb.addEventListener('change', () => {
+      if (cb.checked) selected.add(r.id); else selected.delete(r.id);
+      updateBatchDelete();
+    });
+    selTd.append(cb);
+    tr.prepend(selTd);
     tbody.append(tr);
   });
+  updateBatchDelete();
 }
 
 function renderHostFilter() {
@@ -116,7 +132,7 @@ function upsertCheckRow(tr, data) {
     row = document.createElement('tr');
     row.className = 'check-row';
     const td = document.createElement('td');
-    td.colSpan = 6;
+    td.colSpan = 7; // 域名/路径/备注/创建人/最后修改/操作 + 勾选列
     const box = document.createElement('div');
     box.className = 'check-result';
     td.append(box);
@@ -490,6 +506,46 @@ $('#btn-batch-check').addEventListener('click', async () => {
   renderBatchProgress({ done: 0, total: job.total });
   $$('#rules-table tbody tr[data-id]').forEach((tr) => upsertCheckRow(tr, { pending: true }));
   batchTimer = setInterval(pollBatch, 1500);
+});
+
+// —— 批量删除 ——
+
+function updateBatchDelete() {
+  $('#btn-batch-delete').disabled = selected.size === 0;
+  const boxes = $$('#rules-table tbody input[type="checkbox"]');
+  const checked = boxes.filter((b) => b.checked).length;
+  const all = $('#rules-check-all');
+  all.checked = boxes.length > 0 && checked === boxes.length;
+  all.indeterminate = checked > 0 && checked < boxes.length;
+}
+
+$('#rules-check-all').addEventListener('change', (e) => {
+  $$('#rules-table tbody input[type="checkbox"]').forEach((cb) => {
+    cb.checked = e.target.checked;
+    const id = Number(cb.closest('tr').dataset.id);
+    if (cb.checked) selected.add(id); else selected.delete(id);
+  });
+  updateBatchDelete();
+});
+
+$('#btn-batch-delete').addEventListener('click', async () => {
+  const ids = [...selected];
+  if (ids.length === 0) return;
+  const ok = await confirmDialog({
+    title: '批量删除',
+    message: `确定删除选中的 ${ids.length} 条规则？删除后微信将无法抓取到它们，可在回收站恢复。`,
+    okText: '删除',
+    danger: true,
+  });
+  if (!ok) return;
+  try {
+    const res = await api('/api/rules/batch-delete', { method: 'POST', body: { ids } });
+    toast(`已移入回收站（${res.count} 条）`);
+    loadRules();
+    loadMeta();
+  } catch (err) {
+    toast(err.message);
+  }
 });
 
 // —— 拖拽导入 ——

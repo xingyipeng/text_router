@@ -1,7 +1,34 @@
 import { describe, it, expect } from 'vitest';
 import {
   matchHost, patternIntersects, compareRules, isPattern, normalizePattern, isValidPriority,
+  mainDomain,
 } from '../src/hostmatch.js';
+
+describe('mainDomain', () => {
+  it('精确域名取最后两段', () => {
+    expect(mainDomain('saitron-m.com')).toBe('saitron-m.com');
+    expect(mainDomain('wx-router.saitron-m.com')).toBe('saitron-m.com');
+  });
+
+  it('单段域名保持原样', () => {
+    expect(mainDomain('sasfdsf')).toBe('sasfdsf');
+  });
+
+  it('通配模式去掉通配标签后取最后两段', () => {
+    expect(mainDomain('*.naodu.com')).toBe('naodu.com');
+    expect(mainDomain('**.naodu.com')).toBe('naodu.com');
+    expect(mainDomain('*.sasfdsf')).toBe('sasfdsf');
+  });
+
+  it('全局 * 保持 *，空串按全局处理', () => {
+    expect(mainDomain('*')).toBe('*');
+    expect(mainDomain('')).toBe('*');
+  });
+
+  it('大小写归一', () => {
+    expect(mainDomain('WX.Saitron-M.COM')).toBe('saitron-m.com');
+  });
+});
 
 describe('matchHost', () => {
   it('精确域名只匹配自身', () => {
