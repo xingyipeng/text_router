@@ -11,6 +11,7 @@ import { requireAuth } from '../auth.js';
 import { normalizePattern, isValidPriority } from '../hostmatch.js';
 import { runInternalCheck, runExternalCheck } from '../selfcheck.js';
 import { getSettings } from '../settings.js';
+import { createBatchCheck, getBatchCheck } from '../batchcheck.js';
 
 function parsePayload(body) {
   const filename = body?.filename;
@@ -129,6 +130,28 @@ export function createRulesRoutes({ db, fetchImpl }) {
     })();
 
     return c.json({ imported, skipped, errors });
+  });
+
+  // 注意：/batch-check 必须先于 /:id 注册，避免被参数路由吞掉
+  router.post('/batch-check', async (c) => {
+    let body;
+    try { body = await c.req.json(); } catch { return c.json({ error: 'bad request' }, 400); }
+    const rows = listFiles(db, {
+      host: typeof body?.host === 'string' && body.host ? normalizeHost(body.host) : undefined,
+      q: typeof body?.q === 'string' && body.q ? body.q : undefined,
+      by: body?.by ? Number(body.by) : undefined,
+      onlyGlobal: body?.only_global === true || body?.only_global === '1',
+    });
+    if (rows.length === 0) return c.json({ error: '当前筛选没有规则' }, 400);
+    if (rows.length > 500) return c.json({ error: '规则超过 500 条，请缩小筛选范围后再批量自检' }, 400);
+    const id = createBatchCheck({ db, fetchImpl, rows });
+    return c.json({ id, total: rows.length }, 202);
+  });
+
+  router.get('/batch-check/:id', (c) => {
+    const job = getBatchCheck(c.req.param('id'));
+    if (!job) return c.json({ error: '任务不存在或已过期' }, 404);
+    return c.json(job);
   });
 
   // 注意：/trash/clear 与 /:id/permanent 先于 /:id 系列注册，避免被参数路由吞掉

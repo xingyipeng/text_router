@@ -15,7 +15,15 @@ beforeEach(async () => {
   app = createApp({
     db,
     requestLog: createRequestLog(),
-    config: { sessionTtlHours: 24, cookieSecure: false },
+    config: {
+      sessionTtlHours: 24,
+      cookieSecure: false,
+      fetchImpl: async () => ({
+        status: 200,
+        headers: { get: (k) => (k.toLowerCase() === 'content-type' ? 'text/plain; charset=utf-8' : null) },
+        text: async () => 'v',
+      }),
+    },
   });
   createUser(db, { username: 'alice', password: 'password1234' });
   const res = await app.request('/api/auth/login', {
@@ -423,6 +431,48 @@ describe('POST /api/rules/:id/check', () => {
     const body = await (await api(`/api/rules/${g.id}/check`, 'POST')).json();
     expect(body.internal.ok).toBe(false);
     expect(body.internal.problems.join()).toContain('a.com');
+  });
+});
+
+describe('批量自检', () => {
+  it('创建任务 202，轮询至完成且结果齐全', async () => {
+    await api('/api/rules', 'POST', { host: 'a.com', filename: 'one.txt', content: 'v' });
+    await api('/api/rules', 'POST', { host: 'b.com', filename: 'two.txt', content: 'v' });
+
+    const res = await api('/api/rules/batch-check', 'POST', {});
+    expect(res.status).toBe(202);
+    const { id, total } = await res.json();
+    expect(total).toBe(2);
+
+    let job;
+    for (let i = 0; i < 200; i++) {
+      job = await (await api(`/api/rules/batch-check/${id}`)).json();
+      if (job.status === 'done') break;
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    expect(job.status).toBe('done');
+    expect(job.results).toHaveLength(2);
+    expect(job.results.every((r) => r.external.code === 'OK')).toBe(true);
+  });
+
+  it('筛选参数生效', async () => {
+    await api('/api/rules', 'POST', { host: 'a.com', filename: 'one.txt', content: 'v' });
+    await api('/api/rules', 'POST', { host: 'b.com', filename: 'two.txt', content: 'v' });
+    const res = await api('/api/rules/batch-check', 'POST', { host: 'a.com' });
+    expect((await res.json()).total).toBe(1);
+  });
+
+  it('空筛选与超 500 条返回 400', async () => {
+    expect((await api('/api/rules/batch-check', 'POST', {})).status).toBe(400);
+    for (let i = 0; i < 501; i++) {
+      await api('/api/rules', 'POST', { host: 'a.com', filename: `f${i}.txt`, content: 'v' });
+    }
+    expect((await api('/api/rules/batch-check', 'POST', {})).status).toBe(400);
+  });
+
+  it('不存在的任务 404，未登录 401', async () => {
+    expect((await api('/api/rules/batch-check/nope')).status).toBe(404);
+    expect((await anon('/api/rules/batch-check', 'POST', {})).status).toBe(401);
   });
 });
 
