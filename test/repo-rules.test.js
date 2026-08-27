@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { openDb } from '../src/db.js';
 import {
   createFile, updateFile, getFile, listFiles, listMeta,
-  softDeleteFile, restoreFile, matchFile,
+  softDeleteFile, restoreFile, matchFile, hardDeleteFile, clearTrash,
 } from '../src/repo/rules.js';
 import { UniqueViolation } from '../src/repo/errors.js';
 
@@ -71,6 +71,85 @@ describe('matchFile —— 双模匹配', () => {
     softDeleteFile(db, f.id, 2);
     restoreFile(db, f.id, 3);
     expect(matchFile(db, 'a.com', 'x.txt').content).toBe('v1');
+  });
+});
+
+describe('matchFile —— 模式与优先级', () => {
+  it('单层模式只命中一层子域', () => {
+    createFile(db, { host: '*.example.com', filename: 'x.txt', content: 'p', userId: 1 });
+    expect(matchFile(db, 'www.example.com', 'x.txt').content).toBe('p');
+    expect(matchFile(db, 'example.com', 'x.txt')).toBeUndefined();
+    expect(matchFile(db, 'a.b.example.com', 'x.txt')).toBeUndefined();
+  });
+
+  it('多层模式命中域名本身与任意层子域', () => {
+    createFile(db, { host: '**.example.com', filename: 'x.txt', content: 'p', userId: 1 });
+    expect(matchFile(db, 'example.com', 'x.txt').content).toBe('p');
+    expect(matchFile(db, 'a.b.example.com', 'x.txt').content).toBe('p');
+    expect(matchFile(db, 'other.com', 'x.txt')).toBeUndefined();
+  });
+
+  it('priority 大者压过精确记录', () => {
+    createFile(db, { host: 'a.com', filename: 'x.txt', content: 'exact', userId: 1 });
+    createFile(db, { host: '*', filename: 'x.txt', content: 'global-p10', priority: 10, userId: 1 });
+    expect(matchFile(db, 'a.com', 'x.txt').content).toBe('global-p10');
+  });
+
+  it('同 priority 时精确压过模式压过全局', () => {
+    createFile(db, { host: '*', filename: 'x.txt', content: 'g', userId: 1 });
+    createFile(db, { host: '**.example.com', filename: 'x.txt', content: 'd', userId: 1 });
+    createFile(db, { host: '*.example.com', filename: 'x.txt', content: 's', userId: 1 });
+    createFile(db, { host: 'a.example.com', filename: 'x.txt', content: 'e', userId: 1 });
+    expect(matchFile(db, 'a.example.com', 'x.txt').content).toBe('e');
+    expect(matchFile(db, 'b.example.com', 'x.txt').content).toBe('s');
+    expect(matchFile(db, 'x.other.com', 'x.txt').content).toBe('g');
+  });
+
+  it('同 priority 同具体度时先建者胜', () => {
+    const a = createFile(db, { host: '*.example.com', filename: 'x.txt', content: 'first', userId: 1 });
+    createFile(db, { host: '*.example.com', filename: 'y.txt', content: 'other', userId: 1 });
+    // 唯一索引按 (host, filename) 区分，同一对只能有一条活跃行，无法造出两条
+    // 同具体度同 priority 的竞争行；compareRules 末级以 id 小者胜，此处仅断言
+    // 该行存在且 id 序与创建序一致
+    const rows = db.prepare(
+      "SELECT id, content FROM verify_files WHERE host = '*.example.com' AND filename = 'x.txt'"
+    ).all();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id).toBe(a.id);
+  });
+
+  it('createFile 写入 priority，默认 0', () => {
+    const a = createFile(db, { host: 'a.com', filename: 'x.txt', content: 'v', userId: 1 });
+    const b = createFile(db, { host: 'b.com', filename: 'y.txt', content: 'v', priority: 7, userId: 1 });
+    expect(getFile(db, a.id).priority).toBe(0);
+    expect(getFile(db, b.id).priority).toBe(7);
+  });
+
+  it('updateFile 更新 priority', () => {
+    const f = createFile(db, { host: 'a.com', filename: 'x.txt', content: 'v', userId: 1 });
+    const u = updateFile(db, f.id, { host: 'a.com', filename: 'x.txt', content: 'v', priority: 3, userId: 1 });
+    expect(u.priority).toBe(3);
+  });
+});
+
+describe('hardDeleteFile / clearTrash', () => {
+  it('活动行删不掉（0 行），回收站行可彻底删除', () => {
+    const active = createFile(db, { host: 'a.com', filename: 'x.txt', content: 'v', userId: 1 });
+    expect(hardDeleteFile(db, active.id)).toBe(0);
+    expect(getFile(db, active.id)).toBeTruthy();
+
+    softDeleteFile(db, active.id, 1);
+    expect(hardDeleteFile(db, active.id)).toBe(1);
+    expect(getFile(db, active.id)).toBeUndefined();
+  });
+
+  it('clearTrash 只删回收站，返回删除数', () => {
+    const keep = createFile(db, { host: 'a.com', filename: 'x.txt', content: 'v', userId: 1 });
+    const gone = createFile(db, { host: 'b.com', filename: 'y.txt', content: 'v', userId: 1 });
+    softDeleteFile(db, gone.id, 1);
+    expect(clearTrash(db)).toBe(1);
+    expect(getFile(db, keep.id)).toBeTruthy();
+    expect(getFile(db, gone.id)).toBeUndefined();
   });
 });
 

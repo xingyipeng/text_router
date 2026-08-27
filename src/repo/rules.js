@@ -1,5 +1,6 @@
 import { wrapUnique } from './errors.js';
 import { listUsers } from './users.js';
+import { matchHost, compareRules } from '../hostmatch.js';
 
 const SELECT_WITH_USERS = `
   SELECT f.*,
@@ -12,25 +13,25 @@ const SELECT_WITH_USERS = `
   LEFT JOIN users du ON du.id = f.deleted_by
 `;
 
-export function createFile(db, { host, filename, content, note = '', userId }) {
+export function createFile(db, { host, filename, content, note = '', priority = 0, userId }) {
   const now = Date.now();
   const info = wrapUnique(() =>
     db.prepare(`
       INSERT INTO verify_files
-        (host, filename, content, note, created_at, created_by, updated_at, updated_by)
-      VALUES (?,?,?,?,?,?,?,?)
-    `).run(host, filename, content, note, now, userId, now, userId)
+        (host, filename, content, note, priority, created_at, created_by, updated_at, updated_by)
+      VALUES (?,?,?,?,?,?,?,?,?)
+    `).run(host, filename, content, note, priority, now, userId, now, userId)
   );
   return getFile(db, info.lastInsertRowid);
 }
 
-export function updateFile(db, id, { host, filename, content, note = '', userId }) {
+export function updateFile(db, id, { host, filename, content, note = '', priority = 0, userId }) {
   wrapUnique(() =>
     db.prepare(`
       UPDATE verify_files
-      SET host = ?, filename = ?, content = ?, note = ?, updated_at = ?, updated_by = ?
+      SET host = ?, filename = ?, content = ?, note = ?, priority = ?, updated_at = ?, updated_by = ?
       WHERE id = ? AND deleted_at IS NULL
-    `).run(host, filename, content, note, Date.now(), userId, id)
+    `).run(host, filename, content, note, priority, Date.now(), userId, id)
   );
   return getFile(db, id);
 }
@@ -58,6 +59,19 @@ export function restoreFile(db, id, userId) {
   return getFile(db, id);
 }
 
+// 彻底删除：仅回收站中的行可被物理删除，返回删除行数（活动行 0 行）
+export function hardDeleteFile(db, id) {
+  return db.prepare(
+    'DELETE FROM verify_files WHERE id = ? AND deleted_at IS NOT NULL'
+  ).run(id).changes;
+}
+
+export function clearTrash(db) {
+  return db.prepare(
+    'DELETE FROM verify_files WHERE deleted_at IS NOT NULL'
+  ).run().changes;
+}
+
 // 筛选器元数据：活跃域名（含删除记录中的域名会被隐藏）与操作人。
 // 操作人 = 用户列表中状态正常的用户（与「用户」页一致），不随文件记录变化。
 export function listMeta(db) {
@@ -69,13 +83,19 @@ export function listMeta(db) {
   return { hosts, persons: listUsers(db) };
 }
 
+// 按 filename 查候选行 → JS 过滤模式命中 → 按 compareRules 排序取第一条。
+// 返回形状 {id, content} 不变，verify.js 无需改动。
 export function matchFile(db, host, filename) {
-  return db.prepare(`
-    SELECT id, content FROM verify_files
-    WHERE filename = ? AND deleted_at IS NULL AND (host = ? OR host = '')
-    ORDER BY (host = '') ASC
-    LIMIT 1
-  `).get(filename, host);
+  const rows = db.prepare(`
+    SELECT id, host, content, priority FROM verify_files
+    WHERE filename = ? AND deleted_at IS NULL
+  `).all(filename)
+    .map((r) => ({ ...r, host: r.host === '' ? '*' : r.host })); // 迁移残留的 '' 按全局处理
+  const matched = rows
+    .filter((r) => matchHost(r.host, host))
+    .sort(compareRules);
+  const row = matched[0];
+  return row ? { id: row.id, content: row.content } : undefined;
 }
 
 // 按唯一部分索引查活动行（未删除）的 id，供导入冲突判断（skip/overwrite）用
