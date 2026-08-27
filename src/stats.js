@@ -12,11 +12,11 @@ export function computeStats(db, requestLog) {
     'SELECT COUNT(*) AS n FROM verify_files WHERE deleted_at IS NULL'
   ).get().n;
   const global = db.prepare(
-    "SELECT COUNT(*) AS n FROM verify_files WHERE deleted_at IS NULL AND host = ''"
+    "SELECT COUNT(*) AS n FROM verify_files WHERE deleted_at IS NULL AND host = '*'"
   ).get().n;
   const byDomain = db.prepare(`
     SELECT host, COUNT(*) AS count FROM verify_files
-    WHERE deleted_at IS NULL AND host != ''
+    WHERE deleted_at IS NULL AND host != '' AND host NOT LIKE '%*%'
     GROUP BY host ORDER BY count DESC, host ASC
   `).all();
 

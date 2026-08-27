@@ -23,13 +23,24 @@ describe('computeStats', () => {
   it('统计文件总数、绑定/全局数与域名分布', () => {
     createFile(db, { host: 'a.com', filename: 'x.txt', content: 'v', userId: 1 });
     createFile(db, { host: 'a.com', filename: 'y.txt', content: 'v', userId: 1 });
-    createFile(db, { host: '', filename: 'g.txt', content: 'v', userId: 1 });
+    createFile(db, { host: '*', filename: 'g.txt', content: 'v', userId: 1 });
     const s = computeStats(db, createRequestLog());
     expect(s.files.total).toBe(3);
     expect(s.files.bound).toBe(2);
     expect(s.files.global).toBe(1);
     expect(s.files.domains).toBe(1);
     expect(s.files.byDomain).toEqual([{ host: 'a.com', count: 2 }]);
+  });
+
+  it('模式记录计入绑定数但不出现在域名分布里', () => {
+    createFile(db, { host: '*.a.com', filename: 'p.txt', content: 'v', userId: 1 });
+    createFile(db, { host: '*', filename: 'g.txt', content: 'v', userId: 1 });
+    createFile(db, { host: 'a.com', filename: 'x.txt', content: 'v', userId: 1 });
+    const s = computeStats(db, createRequestLog());
+    expect(s.files.total).toBe(3);
+    expect(s.files.global).toBe(1);
+    expect(s.files.bound).toBe(2);
+    expect(s.files.byDomain).toEqual([{ host: 'a.com', count: 1 }]);
   });
 
   it('域名分布按数量降序', () => {
