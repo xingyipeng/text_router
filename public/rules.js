@@ -113,9 +113,36 @@ function openDialog(row) {
   f.filename.value = row?.filename ?? '';
   f.content.value = row?.content ?? '';
   f.note.value = row?.note ?? '';
+  f.priority.value = row?.priority ?? '';
+  $('#host-global-hint').hidden = !!f.host.value;
   $('#rule-error').textContent = '';
   updateWarnings();
   $('#rule-dialog').showModal();
+}
+
+// 与后端 normalizePattern 一致的轻量副本（项目无构建，前后端不共享模块）
+function validateHostInput(raw) {
+  const h = raw.split(',')[0].trim().toLowerCase().replace(/\.+$/, '');
+  if (!h) return { value: '*' };
+  if (h.includes('*')) {
+    if (h.length > 255) return { error: '域名模式总长不能超过 255' };
+    if (/[:\[\]]/.test(h)) return { error: '模式中不允许端口或方括号' };
+    const labels = h.split('.');
+    const bad = labels.find((l) => l !== '*' && l !== '**' && !/^[a-z0-9_-]{1,63}$/.test(l));
+    if (bad !== undefined) {
+      return { error: '非法域名模式：每段只能是 *、** 或 1-63 位字母/数字/下划线/连字符（不支持 a*、*** 等写法）' };
+    }
+    if (labels.every((l) => l === '**')) return { value: '*' };
+    return { value: h };
+  }
+  return { value: h };
+}
+
+{
+  const input = $('#rule-form').host;
+  input.addEventListener('input', () => {
+    $('#host-global-hint').hidden = !!input.value.trim();
+  });
 }
 
 function updateWarnings() {
@@ -226,13 +253,28 @@ $('#content-warnings').addEventListener('click', (e) => {
 $('#rule-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const f = e.target;
+  $('#rule-error').textContent = '';
+  const hostRes = validateHostInput(f.host.value);
+  if (hostRes.error) {
+    $('#rule-error').textContent = hostRes.error;
+    return;
+  }
+  let priority = 0;
+  const pv = f.priority.value.trim();
+  if (pv !== '') {
+    if (!/^\d+$/.test(pv) || Number(pv) > 1000) {
+      $('#rule-error').textContent = '优先级必须是 0-1000 的整数';
+      return;
+    }
+    priority = Number(pv);
+  }
   const body = {
     host: f.host.value.trim(),
     filename: f.filename.value.trim(),
     content: f.content.value,
     note: f.note.value.trim(),
+    priority,
   };
-  $('#rule-error').textContent = '';
   try {
     if (editingId) await api(`/api/rules/${editingId}`, { method: 'PUT', body });
     else await api('/api/rules', { method: 'POST', body });

@@ -401,8 +401,9 @@
       <p>把从微信后台下载的 <b>.txt</b> 文件拖到这里，自动填充</p>
     </div>
     <label>域名
-      <input name="host" placeholder="留空表示对所有域名生效">
+      <input name="host" placeholder="精确域名或通配模式：* 单层、** 任意层，如 *.example.com、**.example.com；单独 * 表示所有域名">
     </label>
+    <p class="hint" id="host-global-hint" hidden>将保存为全局 *（对所有域名生效）</p>
     <label>路径
       <input name="filename" required placeholder="MP_verify_xxxxxxxx.txt，可含子目录：h5/xxx.txt">
     </label>
@@ -410,6 +411,10 @@
       <textarea name="content" rows="3" required></textarea>
     </label>
     <p id="content-warnings" class="warn"></p>
+    <label>优先级
+      <input name="priority" type="number" min="0" max="1000" step="1" placeholder="0">
+      <span class="hint">数字越大越优先，多条规则冲突时才需要改（0-1000）</span>
+    </label>
     <label>备注
       <input name="note" placeholder="属于哪个公众号 / 小程序 / 项目">
     </label>
