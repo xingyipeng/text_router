@@ -96,7 +96,13 @@ describe('matchHost', () => {
 
   it('host 大小写不敏感，空 host 不命中非全局模式', () => {
     expect(matchHost('example.com', 'EXAMPLE.COM')).toBe(true);
+    expect(matchHost('Example.COM', 'example.com')).toBe(true); // pattern 侧同样不敏感
     expect(matchHost('*.example.com', '')).toBe(false);
+  });
+
+  it('单独 ** 等价全局', () => {
+    expect(matchHost('**', '')).toBe(true);
+    expect(matchHost('**', 'a.b.com')).toBe(true);
   });
 });
 
@@ -126,6 +132,7 @@ describe('normalizePattern', () => {
   it('单独 ** 归一化为 *', () => {
     expect(normalizePattern('**')).toEqual({ ok: true, value: '*' });
     expect(normalizePattern('**.')).toEqual({ ok: true, value: '*' });
+    expect(normalizePattern('**.**')).toEqual({ ok: true, value: '*' });
   });
 
   it('非法模式拒绝：半段/叠加通配、端口、方括号', () => {
@@ -199,6 +206,7 @@ describe('patternIntersects', () => {
     expect(patternIntersects('*.example.com', '**.example.com')).toBe(true);
     expect(patternIntersects('**.example.com', 'example.com')).toBe(true);
     expect(patternIntersects('a.*.com', 'a.b.com')).toBe(true);
+    expect(patternIntersects('a.**.b', 'a.b')).toBe(true);
   });
 
   it('无共同域名时不相交', () => {
@@ -240,7 +248,8 @@ export function isPattern(host) {
   return typeof host === 'string' && host.includes('*');
 }
 
-// 回溯标签比较；模式与 host 的标签数都很小，无需记忆化
+// 回溯标签比较；k 个 ** 对上 n 个标签最坏 C(n+k,k) 条路径，
+// 但模式与 host 标签数都很小（规则行数量级），无需记忆化
 function matchFrom(pi, hi, p, h) {
   if (pi === p.length) return hi === h.length;
   const pl = p[pi];
@@ -259,7 +268,7 @@ export function matchHost(pattern, host) {
   const p = typeof pattern === 'string' ? pattern : '';
   const h = typeof host === 'string' ? host : '';
   if (p === '*') return true; // 全局：命中所有（含空 host）
-  return matchFrom(0, 0, p.split('.'), h === '' ? [] : h.toLowerCase().split('.'));
+  return matchFrom(0, 0, p.toLowerCase().split('.'), h === '' ? [] : h.toLowerCase().split('.'));
 }
 
 // 保存/导入时的校验 + 归一化。返回 { ok, value } 或 { ok, error }。
