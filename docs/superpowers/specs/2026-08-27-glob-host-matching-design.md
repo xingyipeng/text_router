@@ -1,0 +1,175 @@
+# wx_router — glob 域名匹配与手动优先级设计
+
+**日期**：2026-08-27
+**状态**：设计已确认，待实现
+
+---
+
+## 1. 背景与目标
+
+现状：路由规则按「域名 + 文件名」匹配。域名支持两种取值——精确域名，或**留空**表示全局生效。问题：「留空 = 全局」是隐式约定，容易造成误区（用户不知道留空有特殊含义，或误以为空 = 无效）。
+
+目标：
+
+1. 用**显式 glob 模式**取代隐式留空：`*.example.com` 匹配单层子域，`*` 表示全局。
+2. 规则增加**手动优先级**参数，多条规则命中同一请求时由优先级决定胜负。
+3. 保存时前后端双重校验，非法模式即时报错。
+4. 附带：看板 24 小时趋势图增加 Y 轴刻度尺与数据点数值。
+
+## 2. 非目标（YAGNI）
+
+- **不做裸正则**。只支持 `*` 整段标签通配，匹配用标签比较实现，不引入正则（无转义错误、无 ReDoS）。
+- **不做多级通配**。`*` 只匹配单层标签（nginx/Caddy 惯例），`*.example.com` 不匹配 `a.b.example.com`；要多级写 `*.*.example.com`。
+- **不给列表页加优先级排序列**。优先级只在冲突时起作用，非 0 时在域名旁显示小标记。
+- **不动域名分布环形图**。本次只改趋势图。
+
+## 3. 核心模型
+
+### 3.1 host 字段三种取值
+
+| 取值 | 含义 | 例子 |
+|------|------|------|
+| 精确域名 | 只匹配该域名 | `example.com` |
+| glob 模式 | `*` 占一个整段标签 | `*.example.com` |
+| 全局 | 兜底所有域名 | `*` |
+
+### 3.2 匹配与优先级排序
+
+同一 `filename` 的所有活跃规则中，命中请求 host 的按以下次序取第一条：
+
+```
+priority 数字大者 > 同优先级具体度高者（精确 > 模式 > 全局） > 同优先级同具体度先建者（id 小）
+```
+
+- `priority` 是新字段：**整数，默认 0，越大越优先**，允许负值（降级），范围 -999~999。
+- 全部用默认值时行为与现状一致（精确 > 全局），零惊讶。
+- 想要例外时手动调数字，例如让 `*` 全局记录（priority 10）压过某条精确规则（priority 0）。
+
+### 3.3 匹配实现：标签比较，不用正则
+
+glob 只允许 `*` 作为整段标签，因此逐段比较即可表达全部语义：
+
+```
+matchHost(pattern, host):
+  pattern === '*'            → 命中所有（含空 host）
+  两边的标签数相等，且逐段：p === '*' 或 p === h   → 命中
+```
+
+`matchFile` 从一条 SQL 改为「按 filename 索引查候选行 + JS 过滤排序取第一条」，规则行数量级下开销可忽略。返回形状不变（`{id, content}`），`verify.js` 无需改动。
+
+### 3.4 模式校验规则（normalizePattern）
+
+保存/导入时执行：
+
+- 空字符串 → 归一化为 `*`
+- 统一小写、去尾点、取逗号首段（与现有 `normalizeHost` 习惯一致）
+- 含 `*` 时按模式校验：每段要么是 `*` 要么是 `[a-z0-9_-]{1,63}`（DNS 标签上限）；不允许端口、方括号、`**`、`a*` 这类半段通配；总长 ≤ 255
+- 不含 `*` 走现有 `normalizeHost`（去端口/括号/尾点）
+
+### 3.5 模式交集（供自检用）
+
+两个模式的交集非空当且仅当：标签数相等且逐段相容（相等或一方为 `*`）。
+
+## 4. 数据与迁移
+
+`verify_files` 表新增列：
+
+```sql
+ALTER TABLE verify_files ADD COLUMN priority INTEGER NOT NULL DEFAULT 0;
+UPDATE verify_files SET host = '*' WHERE host = '';  -- 存量全局记录一次性转换
+```
+
+- 迁移在 `openDb` 中幂等执行：`SCHEMA`（新建库）直接含 `priority` 列；`PRAGMA table_info` 检测旧库缺列时执行 ALTER + UPDATE。
+- 唯一索引 `idx_active_host_filename (host, filename)` 不变。
+- 保存时空 host 自动归一化为 `*`，此后库里不再产生 `''`。
+
+## 5. 各模块改动
+
+### 5.1 新模块 `src/hostmatch.js`（纯函数）
+
+| 函数 | 职责 |
+|------|------|
+| `matchHost(pattern, host)` | §3.3 标签比较 |
+| `patternIntersects(a, b)` | §3.5 模式交集 |
+| `compareRules(a, b)` | §3.2 排序比较器（priority → 具体度 → id） |
+| `isPattern(host)` | 是否含 `*`（决定自检/统计口径） |
+| `normalizePattern(raw)` | §3.4 校验 + 归一化，返回 `{ ok, value }` 或 `{ ok, error }` |
+| `isValidPriority(v)` | -999~999 整数 |
+
+### 5.2 `src/repo/rules.js`
+
+- `matchFile`：`SELECT id, host, content, priority FROM verify_files WHERE filename = ? AND deleted_at IS NULL` → JS 过滤 `matchHost` → `compareRules` 排序 → 取第一条。
+- `createFile` / `updateFile`：写入 `priority`（默认 0）。
+- `listFiles` 筛选升级为业务语义：选某域名时显示**该域名会命中的全部规则**——SQL 取 `host = ?` 与含 `*` 的行（`host LIKE '%*%'`），JS 按 `matchHost` 过滤。
+- `listMeta.hosts` 只列精确域名（排除含 `*` 的行），模式不进下拉。
+- `onlyGlobal` 语义改为 `host = '*'`。
+
+### 5.3 `src/routes/rules.js`
+
+- `parsePayload`：host 走 `normalizePattern`，priority 走 `isValidPriority`，非法返回 400 中文错误；缺省 priority 补 0。
+- 导出文件每条增加 `priority` 字段。
+- 导入复用 `parsePayload` 校验；旧格式（无 priority）默认 0，向后兼容。
+
+### 5.4 `src/selfcheck.js`
+
+- 外部验证：`isPattern(file.host)` → `NO_HOST`，文案改为「模式规则无法确定验证域名，请手动访问目标 URL 确认」。
+- 内部遮蔽检测统一为新排序逻辑，与线上匹配同源：
+  - 精确规则：`matchFile(db, host, filename)` 比对（现状不变）。
+  - 模式/全局规则：扫描同 filename 的其他活跃行，凡「`patternIntersects` 非空 且 `compareRules` 赢过它」的列入遮蔽提示。
+
+### 5.5 `src/stats.js`
+
+- `global` 统计改为 `host = '*'`。
+- `byDomain` 只计精确域名（排除含 `*` 的行）。
+- `bound = total - global` 不变（模式计入绑定），看板文案无需改。
+
+### 5.6 `src/verify.js`
+
+无需改动（`matchFile` 返回形状不变，请求日志字段不变）。
+
+## 6. UI 改动
+
+### 6.1 规则对话框（`public/index.html` + `public/rules.js`）
+
+- 域名输入框提示改为「精确域名或通配模式：`*.example.com`，`*` 表示所有域名」。
+- 新增「优先级」数字输入框，默认 0，提示「数字越大越优先，冲突时才需要改」。
+- **提交前前端校验**（§7 双重验证）：同一套规则在 `public/rules.js` 写轻量副本（项目无构建、前后端不共享模块），错误显示在 `#rule-error`，不发请求；host 留空时提示「将保存为全局 *」。
+
+### 6.2 规则列表（`public/rules.js`）
+
+- host 列：`*` 显示为「所有域名」、模式与精确域名原样显示（不再有「全部域名」的斜体 em 特判）。
+- 优先级非 0 时域名旁加小标记 `(优先 N)`。
+- 筛选下拉：「全局（未指定域名）」改为「全局（*）」。
+
+### 6.3 看板趋势图（`public/dashboard.js` + `public/style.css`）
+
+- **Y 轴刻度尺**：左侧预留 34px 标签区，按 `1/2/2.5/5 × 10^k` 步进取整刻度（如最大值 7 → 刻度 0/2/4/6/8），4 条网格线左端标数值；横轴时间标签（每 6 小时）不变。
+- **数据点数值**：每个 count > 0 的点上方标 9px 小字数值；零点不标（贴着轴线会与时间标签打架）；末尾点圆点标记保留。
+- 新增 CSS 类 `trend-y-label`、`trend-point-label`。
+
+## 7. 保存时双重验证
+
+- **后端（权威）**：`normalizePattern` + `isValidPriority`，非法 400。新建、编辑、导入三条路径共用同一套校验。
+- **前端（即时反馈）**：提交前本地校验，非法时 `#rule-error` 显示错误、不发请求。前端校验只是体验优化，后端校验是最终裁决。
+
+## 8. 兼容性
+
+- 旧库启动时自动迁移（§4），存量全局记录变为 `*`，行为不变。
+- 导入旧导出文件（无 priority）默认 0。
+- API 响应中 host 恒非空（`*` / 模式 / 精确域名之一）。
+
+## 9. 测试计划
+
+| 文件 | 覆盖 |
+|------|------|
+| `test/hostmatch.test.js`（新增） | matchHost（精确/单标签模式/全局/多级不命中/空 host）、patternIntersects、compareRules（priority/具体度/id 三级）、normalizePattern（空→*、非法模式拒绝、大小写/尾点归一化）、isValidPriority |
+| `test/repo-rules.test.js`（更新） | matchFile 模式命中、优先级覆盖、同优先级具体度兜底；listFiles 筛选业务语义（模式行出现在命中域名筛选中）；onlyGlobal 用 `*`；listMeta 排除模式 |
+| `test/routes-rules.test.js`（更新） | parsePayload：空 host → `*`、非法模式 400、priority 越界/非整数 400；导出含 priority；旧格式导入默认 0 |
+| `test/selfcheck.test.js`（更新） | 模式规则 NO_HOST；遮蔽检测（模式被精确遮蔽、被高优先级全局遮蔽、低优先级不提示） |
+| `test/stats.test.js`（更新） | global 统计 `*`；byDomain 排除模式 |
+| 迁移测试 | 旧库（无 priority 列、host=''）openDb 后：列存在、host 变 `*`、行为等价 |
+
+## 10. 文档同步
+
+- README 第 17 行「路由规则全局生效或按域名绑定」→ 补「支持通配模式与手动优先级」。
+- README 第 77 行「把规则域名留空，全局生效」→ 「把规则域名填 `*` 全局生效，支持 `*.example.com` 通配与优先级」。
