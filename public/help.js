@@ -5,6 +5,7 @@ import { $, $$, api, escapeHtml } from './app.js';
 // 若未来允许用户上传文档，这里必须加上 sanitize。
 
 let listLoaded = false;
+let loadPromise = null;
 
 async function loadList() {
   const nav = $('#help-list');
@@ -53,6 +54,13 @@ async function loadList() {
   showDoc(docs[0].id, docs[0].group);
 }
 
+// 等待文档列表就绪（幂等：多次调用共享同一 Promise）
+function ensureList() {
+  if (listLoaded) return Promise.resolve();
+  if (!loadPromise) loadPromise = loadList();
+  return loadPromise;
+}
+
 // 按标题过滤条目；某组全部隐藏时隐藏该组头
 function applyFilter(q) {
   q = q.trim().toLowerCase();
@@ -97,9 +105,24 @@ async function showDoc(id, group) {
   box.innerHTML = marked.parse(doc.content);
 }
 
+// 切换到帮助面板并打开指定文档（规则对话框「?」入口）。
+// 通过 location.hash 触发 switchTab（已在帮助页则直接继续），等待列表就绪后定位文档。
+export async function openHelpDoc(id) {
+  location.hash = '#/help';
+  await ensureList();
+  $('#help-search').value = '';
+  applyFilter('');
+  const btn = $$('.help-item').find((b) => b.dataset.id === id && !b.dataset.group);
+  if (btn) {
+    btn.click();
+    return;
+  }
+  showDoc(id, ''); // 列表里没有时直接按根组打开
+}
+
 $('#help-search').addEventListener('input', (e) => applyFilter(e.target.value));
 
 document.addEventListener('tab:show', (e) => {
   if (e.detail !== 'help') return;
-  if (!listLoaded) loadList();
+  ensureList();
 });

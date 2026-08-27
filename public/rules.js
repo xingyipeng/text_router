@@ -1,4 +1,5 @@
 import { $, $$, api, toast, fmtTime, personLabel, escapeHtml, listeners, confirmDialog } from './app.js';
+import { openHelpDoc } from './help.js';
 
 const filters = { host: '', q: '', by: '', sort: 'updated', dir: 'desc' };
 // 各排序键的默认方向：时间类默认新→旧，文本类默认 A→Z
@@ -282,6 +283,7 @@ $('#btn-rules-refresh').addEventListener('click', () => {
   loadMeta();
 });
 $('#btn-new').addEventListener('click', () => openDialog(null));
+$('#btn-host-help').addEventListener('click', () => openHelpDoc('rules-guide'));
 $('#rule-cancel').addEventListener('click', () => $('#rule-dialog').close());
 $('#rule-form').content.addEventListener('input', updateWarnings);
 
