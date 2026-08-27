@@ -425,10 +425,11 @@
         <input id="rule-host" name="host" placeholder="如 *.example.com；单独 * 表示所有域名">
         <span class="hint" id="host-global-hint" hidden>留空将保存为全局 *（对所有域名生效）</span>
       </div>
-      <label>优先级
-        <input name="priority" type="number" min="0" max="1000" step="1" placeholder="0~1000">
+      <div class="field">
+        <label class="field-label" for="rule-priority">优先级</label>
+        <input id="rule-priority" name="priority" type="number" min="0" max="1000" step="1" placeholder="0~1000">
         <span class="hint">数字越大越优先</span>
-      </label>
+      </div>
     </div>
     <label>路径
       <input name="filename" required placeholder="路径不限制扩展名，如 MP_verify_xxxxxxxx.txt、apple-app-site-association，可含子目录">
