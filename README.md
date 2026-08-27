@@ -14,7 +14,7 @@ text_router 用一个统一出口解决：所有 `.txt` 请求转发到它，按
 
 ## 功能特性
 
-- 路由规则全局生效或按域名绑定，路径支持任意深度子目录（`h5/xxx.txt`）
+- 路由规则全局生效或按域名绑定，支持 `*.example.com` / `**.example.com` 通配与手动优先级，路径支持任意深度子目录（`h5/xxx.txt`）
 - 微信下载的校验文件直接**拖拽导入**，文件名内容自动填入
 - 实时看板：24 小时请求趋势、命中率、按域名分布
 - 两层自检：内部数据检查 + 外部真实请求验证，失败原因精确分类
@@ -74,7 +74,7 @@ crpi-1z575ueyebmvfwqg.cn-shanghai.personal.cr.aliyuncs.com/yujianpengpeng/text_r
 ## 网关需要做什么
 
 1. 把 `.txt` 请求转发到本服务 3000 端口，**不重写路径**——微信校验文件必须位于根路径；本服务同时支持子目录，一条规则转发任意深度 `.txt` 即可
-2. **保留原始域名**（`Host` 或 `X-Forwarded-Host`）；做不到就把规则域名留空，全局生效
+2. **保留原始域名**（`Host` 或 `X-Forwarded-Host`）；做不到就把规则域名填 `*` 全局生效，支持 `*.example.com` / `**.example.com` 通配与优先级
 
 完整配置见 [docs/网关接入/](docs/网关接入/)（Nginx / Traefik / Caddy / Apache / Kong / APISIX），管理端「帮助」面板也可直接查看。
 
