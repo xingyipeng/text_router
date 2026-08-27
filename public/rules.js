@@ -59,8 +59,10 @@ function renderRules(rows) {
   rows.forEach((r, i) => {
     const tr = document.createElement('tr');
     tr.style.setProperty('--i', i); // 行入场错峰（纯展示）
+    const hostCell = r.host === '*' ? '所有域名' : escapeHtml(r.host);
+    const priorityBadge = r.priority ? ` <small>(优先 ${r.priority})</small>` : '';
     tr.innerHTML = `
-      <td class="mono">${r.host ? escapeHtml(r.host) : '<em>全部域名</em>'}</td>
+      <td class="mono">${hostCell}${priorityBadge}</td>
       <td class="mono">${escapeHtml(r.filename)}</td>
       <td>${escapeHtml(r.note)}</td>
       <td>${escapeHtml(personLabel(r.created_by_username, r.created_by_name))}</td>
@@ -82,7 +84,7 @@ function renderHostFilter() {
   const current = sel.value;
   sel.innerHTML =
     '<option value="">全部域名</option>' +
-    '<option value="__global__">全局（未指定域名）</option>';
+    '<option value="__global__">全局（*）</option>';
   for (const host of meta.hosts) {
     const o = document.createElement('option');
     o.value = host;
@@ -236,6 +238,10 @@ $('#rules-table thead').addEventListener('click', (e) => {
   loadRules();
 });
 renderSortState();
+$('#btn-rules-refresh').addEventListener('click', () => {
+  loadRules();
+  loadMeta();
+});
 $('#btn-new').addEventListener('click', () => openDialog(null));
 $('#rule-cancel').addEventListener('click', () => $('#rule-dialog').close());
 $('#rule-form').content.addEventListener('input', updateWarnings);
