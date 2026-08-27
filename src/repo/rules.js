@@ -77,7 +77,7 @@ export function clearTrash(db) {
 export function listMeta(db) {
   const hosts = db.prepare(`
     SELECT DISTINCT host FROM verify_files
-    WHERE deleted_at IS NULL AND host != ''
+    WHERE deleted_at IS NULL AND host != '' AND host NOT LIKE '%*%'
     ORDER BY host ASC
   `).all().map((r) => r.host);
   return { hosts, persons: listUsers(db) };
@@ -124,11 +124,11 @@ export function listFiles(db, { host, q, by, sort = 'updated', dir, includeDelet
   const params = [];
   if (!includeDeleted) where.push('f.deleted_at IS NULL');
   if (onlyGlobal) {
-    // 只看全局记录（空域名）
-    where.push("f.host = ''");
+    // 只看全局记录（*）
+    where.push("f.host = '*'");
   } else if (host !== undefined && host !== null && host !== '') {
-    // 选具体域名时带上全局记录：全局文件对该域名同样生效
-    where.push("(f.host = ? OR f.host = '')");
+    // 业务语义：列出「该域名会命中的全部规则」——SQL 取精确行 + 模式行，JS 再精确过滤
+    where.push("(f.host = ? OR f.host LIKE '%*%')");
     params.push(host);
   }
   if (q) {
@@ -144,5 +144,9 @@ export function listFiles(db, { host, q, by, sort = 'updated', dir, includeDelet
   const direction = dir === 'asc' || dir === 'desc' ? dir.toUpperCase() : s.defaultDir;
   // SQL 的方向只作用于单个表达式，多列排序（含并列次序）需逐列加上方向
   const orderBy = s.expr.split(',').map((col) => `${col} ${direction}`).join(', ');
-  return db.prepare(`${SELECT_WITH_USERS} ${clause} ORDER BY ${orderBy}`).all(...params);
+  let rows = db.prepare(`${SELECT_WITH_USERS} ${clause} ORDER BY ${orderBy}`).all(...params);
+  if (!includeDeleted && !onlyGlobal && host !== undefined && host !== null && host !== '') {
+    rows = rows.filter((r) => matchHost(r.host === '' ? '*' : r.host, host));
+  }
+  return rows;
 }

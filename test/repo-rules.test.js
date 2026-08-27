@@ -230,15 +230,23 @@ describe('listFiles', () => {
     expect(listFiles(db, { host: 'a.com' })).toHaveLength(1);
   });
 
-  it('按 host 过滤时包含全局记录（空 host）', () => {
-    createFile(db, { host: '', filename: 'g.txt', content: 'v', userId: 1 });
+  it('按 host 过滤时包含全局记录（*）', () => {
+    createFile(db, { host: '*', filename: 'g.txt', content: 'v', userId: 1 });
     const rows = listFiles(db, { host: 'a.com' });
     expect(rows.map((r) => r.filename).sort()).toEqual(['g.txt', 'one.txt']);
   });
 
   it('onlyGlobal 只返回全局记录', () => {
-    createFile(db, { host: '', filename: 'g.txt', content: 'v', userId: 1 });
+    createFile(db, { host: '*', filename: 'g.txt', content: 'v', userId: 1 });
     expect(listFiles(db, { onlyGlobal: true }).map((r) => r.filename)).toEqual(['g.txt']);
+  });
+
+  it('按 host 过滤时包含会命中的模式行，排除不命中的', () => {
+    createFile(db, { host: '*.a.com', filename: 'p.txt', content: 'v', userId: 1 });
+    createFile(db, { host: '*.b.com', filename: 'q.txt', content: 'v', userId: 1 });
+    const rows = listFiles(db, { host: 'x.a.com' });
+    // one.txt 的 host 是精确域名 a.com，不命中 x.a.com，不在结果中
+    expect(rows.map((r) => r.filename).sort()).toEqual(['p.txt']);
   });
 
   it('按 q 搜索文件名与备注', () => {
@@ -288,8 +296,15 @@ describe('listMeta', () => {
     createFile(db, { host: 'b.com', filename: 'b.txt', content: 'v', userId: 1 });
     createFile(db, { host: 'a.com', filename: 'a.txt', content: 'v', userId: 1 });
     createFile(db, { host: 'a.com', filename: 'a2.txt', content: 'v', userId: 1 });
-    createFile(db, { host: '', filename: 'g.txt', content: 'v', userId: 1 });
+    createFile(db, { host: '*', filename: 'g.txt', content: 'v', userId: 1 });
     expect(listMeta(db).hosts).toEqual(['a.com', 'b.com']);
+  });
+
+  it('hosts 排除通配模式行', () => {
+    createFile(db, { host: '*.a.com', filename: 'p.txt', content: 'v', userId: 1 });
+    createFile(db, { host: '*', filename: 'g.txt', content: 'v', userId: 1 });
+    createFile(db, { host: 'a.com', filename: 'a.txt', content: 'v', userId: 1 });
+    expect(listMeta(db).hosts).toEqual(['a.com']);
   });
 
   it('已删除记录的唯一域名不出现在 hosts 里', () => {
