@@ -120,6 +120,30 @@ describe('computeStats', () => {
     expect(s.requests.todayMisses).toBe(1);
   });
 
+  it('按路径聚合，未命中单独计数，按次数降序', () => {
+    const log = createRequestLog();
+    for (let i = 0; i < 3; i++) log.record({ path: '/a.txt', hit: true });
+    log.record({ path: '/b.txt', hit: false });
+    log.record({ path: '/b.txt', hit: false });
+    log.record({ path: '/c.txt', hit: true });
+    const s = computeStats(db, log);
+    expect(s.requests.byPath).toEqual([
+      { path: '/a.txt', count: 3, misses: 0 },
+      { path: '/b.txt', count: 2, misses: 2 },
+      { path: '/c.txt', count: 1, misses: 0 },
+    ]);
+  });
+
+  it('路径统计同次数按路径名排序，最多 10 条', () => {
+    const log = createRequestLog();
+    for (let i = 0; i < 12; i++) log.record({ path: `/p${String(i).padStart(2, '0')}.txt` });
+    const s = computeStats(db, log);
+    expect(s.requests.byPath).toHaveLength(10);
+    expect(s.requests.byPath.map((p) => p.path)).toEqual(
+      Array.from({ length: 10 }, (_, i) => `/p${String(i).padStart(2, '0')}.txt`),
+    );
+  });
+
   it('按小时聚合最近 24 小时，总数一致且最新记录落在最后一个桶', () => {
     const log = createRequestLog();
     for (let i = 0; i < 5; i++) log.record({ path: `/${i}.txt` });

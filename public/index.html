@@ -209,16 +209,23 @@
             <div id="dash-domains"></div>
             <div id="dash-rule-hosts"></div>
           </div>
+          <div class="dash-panel dash-paths">
+            <h2>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="14" y2="18"/></svg>
+              路径统计（Top 10）
+            </h2>
+            <div id="dash-paths"></div>
+          </div>
+          <div class="dash-panel dash-recent">
+            <h2>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              最近请求
+              <button type="button" id="btn-recent-all" class="btn link">查看全部</button>
+            </h2>
+            <div id="dash-recent-list"></div>
+          </div>
         </div>
         <p class="hint">请求统计来自内存记录，服务重启后清零；路由统计来自数据库。</p>
-        <div class="dash-panel dash-recent">
-          <h2>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-            最近请求
-            <button type="button" id="btn-recent-all" class="btn link">查看全部</button>
-          </h2>
-          <div id="dash-recent-list"></div>
-        </div>
       </div>
 
       <div id="panel-rules" class="panel">

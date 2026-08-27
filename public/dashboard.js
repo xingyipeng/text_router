@@ -15,6 +15,7 @@ async function loadDashboard() {
     renderTrend(s.requests.byHour);
     renderMainDomains(s.files.byMainDomain);
     renderRuleHosts(s.files.byRuleHost);
+    renderPaths(s.requests.byPath);
     renderRecent(s.requests.recent);
   } finally {
     // 数据就绪后关闭骨架微光（纯展示）
@@ -131,6 +132,23 @@ function renderMainDomains(rows) {
           </div>`).join('')}
       </div>
     </div>`;
+}
+
+// 路径统计：Top 10 条形列表，未命中标红（提示缺失规则）
+function renderPaths(rows) {
+  const box = $('#dash-paths');
+  if (!rows.length) {
+    box.innerHTML = '<p class="empty">暂无请求数据</p>';
+    return;
+  }
+  const max = rows[0].count;
+  box.innerHTML = rows.map((r) => `
+    <div class="path-row">
+      <span class="path-name mono${r.misses ? ' bad' : ''}" title="${escapeHtml(r.path)}">${escapeHtml(r.path)}</span>
+      <span class="path-bar"><i style="width:${((r.count / max) * 100).toFixed(1)}%"></i></span>
+      <span class="path-count">${r.count}</span>
+      ${r.misses ? `<span class="path-badge">未命中 ${r.misses}</span>` : ''}
+    </div>`).join('');
 }
 
 // 看板底部预览：最新几条请求（完整列表在「请求记录」页）

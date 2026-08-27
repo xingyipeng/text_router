@@ -51,6 +51,19 @@ export function computeStats(db, requestLog) {
   const todayStart = startOfDay(now);
   const today = entries.filter((e) => e.at >= todayStart);
 
+  // 按路径统计：聚合内存窗口内的请求，未命中单独计数（提示缺失规则）
+  const pathMap = new Map();
+  for (const e of entries) {
+    const cur = pathMap.get(e.path) || { count: 0, misses: 0 };
+    cur.count += 1;
+    if (!e.hit) cur.misses += 1;
+    pathMap.set(e.path, cur);
+  }
+  const byPath = [...pathMap.entries()]
+    .map(([path, { count, misses }]) => ({ path, count, misses }))
+    .sort((a, b) => b.count - a.count || a.path.localeCompare(b.path))
+    .slice(0, 10);
+
   // 最近 24 小时按小时聚合，无请求的小时补零（旧→新）
   const curHour = Math.floor(now / HOUR_MS);
   const byHour = [];
@@ -78,6 +91,7 @@ export function computeStats(db, requestLog) {
       todayHits: today.filter((e) => e.hit).length,
       todayMisses: today.filter((e) => !e.hit).length,
       byHour,
+      byPath,
       // 看板底部预览：最新 5 条，拼成完整 URL（完整记录在请求记录页）
       recent: entries.slice(0, 5).map((e) => ({
         at: e.at,
