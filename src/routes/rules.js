@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import {
-  createFile, updateFile, getFile, listFiles, softDeleteFile, restoreFile, listMeta,
-  findActiveByHostFilename,
+  createFile, updateFile, getFile, listFiles, softDeleteFile, restoreFile, hardDeleteFile,
+  clearTrash, listMeta, findActiveByHostFilename,
 } from '../repo/rules.js';
 import { UniqueViolation } from '../repo/errors.js';
 import {
@@ -129,6 +129,18 @@ export function createRulesRoutes({ db, fetchImpl }) {
     })();
 
     return c.json({ imported, skipped, errors });
+  });
+
+  // 注意：/trash/clear 与 /:id/permanent 先于 /:id 系列注册，避免被参数路由吞掉
+  router.post('/trash/clear', (c) => {
+    return c.json({ count: clearTrash(db) });
+  });
+
+  router.delete('/:id/permanent', (c) => {
+    const id = Number(c.req.param('id'));
+    const n = hardDeleteFile(db, id);
+    if (n === 0) return c.json({ error: '记录不存在或未在回收站中' }, 404);
+    return c.body(null, 204);
   });
 
   router.post('/', async (c) => {

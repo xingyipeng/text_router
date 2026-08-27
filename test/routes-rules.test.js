@@ -368,6 +368,37 @@ describe('DELETE 与 restore', () => {
     await api('/api/rules', 'POST', { host: 'a.com', filename: 'x.txt', content: 'v2' });
     expect((await api(`/api/rules/${f.id}/restore`, 'POST')).status).toBe(409);
   });
+
+  it('彻底删除回收站记录，成功后任何列表都查不到', async () => {
+    const f = await (await api('/api/rules', 'POST',
+      { host: 'a.com', filename: 'x.txt', content: 'v' })).json();
+    await api(`/api/rules/${f.id}`, 'DELETE');
+    expect((await api(`/api/rules/${f.id}/permanent`, 'DELETE')).status).toBe(204);
+    expect(await (await api('/api/rules?include_deleted=1')).json()).toHaveLength(0);
+  });
+
+  it('活动记录与不存在的 id 彻底删除返回 404', async () => {
+    const f = await (await api('/api/rules', 'POST',
+      { host: 'a.com', filename: 'x.txt', content: 'v' })).json();
+    expect((await api(`/api/rules/${f.id}/permanent`, 'DELETE')).status).toBe(404);
+    expect((await api('/api/rules/9999/permanent', 'DELETE')).status).toBe(404);
+  });
+
+  it('清空回收站返回删除数，活动记录不受影响', async () => {
+    await api('/api/rules', 'POST', { host: 'a.com', filename: 'keep.txt', content: 'v' });
+    const d1 = await (await api('/api/rules', 'POST',
+      { host: 'b.com', filename: 'gone1.txt', content: 'v' })).json();
+    const d2 = await (await api('/api/rules', 'POST',
+      { host: 'c.com', filename: 'gone2.txt', content: 'v' })).json();
+    await api(`/api/rules/${d1.id}`, 'DELETE');
+    await api(`/api/rules/${d2.id}`, 'DELETE');
+
+    const res = await api('/api/rules/trash/clear', 'POST');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ count: 2 });
+    expect(await (await api('/api/rules')).json()).toHaveLength(1);
+    expect(await (await api('/api/rules?include_deleted=1')).json()).toHaveLength(1);
+  });
 });
 
 describe('POST /api/rules/:id/check', () => {
