@@ -27,23 +27,39 @@ function renderTrend(hours) {
   svg.hidden = !hasData;
   if (!hasData) return;
 
-  const W = 600, H = 180, PAD = 10, AXIS = 24;
-  const max = Math.max(...hours.map((h) => h.count), 1);
-  const step = (W - PAD * 2) / (hours.length - 1);
-  const x = (i) => PAD + i * step;
-  const y = (c) => H - AXIS - (c / max) * (H - AXIS - PAD);
+  const W = 600, H = 180, PL = 40, PR = 10, PT = 14, AXIS = 24; // 左侧刻度区 40px
+  const innerW = W - PL - PR;
+  const rawMax = Math.max(...hours.map((h) => h.count), 1);
+  // 1/2/2.5/5 × 10^k 步进取整刻度（如最大值 7 → 刻度 0/2/4/6/8）
+  const mag = 10 ** Math.floor(Math.log10(rawMax));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => s * 4 >= rawMax);
+  const yMax = 4 * step;
+  const x = (i) => PL + (innerW * i) / (hours.length - 1);
+  const y = (c) => H - AXIS - (c / yMax) * (H - AXIS - PT);
   const pts = hours.map((h, i) => [x(i), y(h.count)]);
   const line = pts.map(([px, py], i) => `${i ? 'L' : 'M'}${px.toFixed(1)},${py.toFixed(1)}`).join(' ');
-  const area = `${line} L${x(hours.length - 1).toFixed(1)},${H - AXIS} L${PAD},${H - AXIS} Z`;
+  const area = `${line} L${x(hours.length - 1).toFixed(1)},${H - AXIS} L${PL},${H - AXIS} Z`;
 
-  // 水平参考网格线（4 档）
-  const grid = [0.25, 0.5, 0.75, 1]
-    .map((f) => `<line class="trend-grid" x1="${PAD}" y1="${y(max * f).toFixed(1)}" x2="${W - PAD}" y2="${y(max * f).toFixed(1)}"/>`)
-    .join('');
+  const fmt = (v) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
+  // 4 条网格线（1/4 步进）左端标数值，基线不标
+  const grid = [0, 1, 2, 3, 4].map((k) => {
+    const gy = y(yMax * (k / 4)).toFixed(1);
+    const val = fmt(yMax * (k / 4));
+    return k === 0
+      ? `<line class="trend-grid" x1="${PL}" y1="${gy}" x2="${W - PR}" y2="${gy}"/>`
+      : `<line class="trend-grid" x1="${PL}" y1="${gy}" x2="${W - PR}" y2="${gy}"/>
+         <text x="${PL - 6}" y="${gy}" class="trend-y-label" dy="0.32em">${val}</text>`;
+  }).join('');
   const labels = hours
     .filter((_, i) => i % 6 === 0)
     .map((h, i) =>
       `<text x="${x(i * 6).toFixed(1)}" y="${H - 7}" class="trend-label">${h.hour}:00</text>`)
+    .join('');
+  // 数据点数值：count > 0 的点上方标小字（零点贴着轴线不标）
+  const pointLabels = hours
+    .map((h, i) => h.count > 0
+      ? `<text x="${x(i).toFixed(1)}" y="${(y(h.count) - 6).toFixed(1)}" class="trend-point-label" text-anchor="middle">${h.count}</text>`
+      : '')
     .join('');
   const last = pts[pts.length - 1];
 
@@ -56,6 +72,7 @@ function renderTrend(hours) {
     <path d="${area}" fill="url(#trend-fill)"/>
     <path d="${line}" fill="none" stroke="#2563eb" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
     <circle cx="${last[0].toFixed(1)}" cy="${last[1].toFixed(1)}" r="4" fill="#2563eb" stroke="#fff" stroke-width="2"/>
+    ${pointLabels}
     ${labels}`;
 }
 

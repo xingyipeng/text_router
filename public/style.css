@@ -811,6 +811,10 @@ dialog menu .btn { min-width: 72px; }
   .markdown-body { padding: 16px 18px; }
 }
 
+/* 趋势图 Y 轴刻度与数据点数值 */
+.trend-y-label { fill: var(--text-3); font-size: 10px; text-anchor: end; }
+.trend-point-label { fill: var(--text-2); font-size: 9px; }
+
 /* ============================================================
    无障碍：减少动效
    ============================================================ */
