@@ -1,4 +1,4 @@
-import { $, api, toast, fmtTime, personLabel, escapeHtml, listeners, confirmDialog } from './app.js';
+import { $, $$, api, toast, fmtTime, personLabel, escapeHtml, listeners, confirmDialog } from './app.js';
 
 const filters = { host: '', q: '', by: '', sort: 'updated', dir: 'desc' };
 // 各排序键的默认方向：时间类默认新→旧，文本类默认 A→Z
@@ -105,6 +105,42 @@ function renderPeopleFilter() {
     sel.append(o);
   }
   sel.value = current;
+}
+
+// 在指定规则行下方渲染/更新自检结果行；pending 转圈、error 直显、否则徽章
+function upsertCheckRow(tr, data) {
+  const tbody = tr.parentElement;
+  let row = tr.nextElementSibling;
+  if (!row || !row.classList.contains('check-row')) {
+    row = document.createElement('tr');
+    row.className = 'check-row';
+    const td = document.createElement('td');
+    td.colSpan = 6;
+    const box = document.createElement('div');
+    box.className = 'check-result';
+    td.append(box);
+    row.append(td);
+    tr.after(row);
+  }
+  const box = row.querySelector('.check-result');
+  if (data.pending) {
+    box.innerHTML = '<span class="check unknown">检查中…</span>';
+    return;
+  }
+  if (data.error) {
+    box.textContent = data.error;
+    return;
+  }
+  const { internal, external } = data;
+  const cls = external.code === 'OK' ? 'ok'
+    : ['NO_HOST', 'EGRESS_BLOCKED'].includes(external.code) ? 'unknown' : 'bad';
+  const internalPart = internal.ok
+    ? '内部检查通过'
+    : `内部检查未通过：${internal.problems.join('；')}`;
+  box.innerHTML =
+    `<span class="check ${internal.ok ? 'ok' : 'bad'}">${escapeHtml(internalPart)}</span>
+     <span class="check ${cls}">${escapeHtml(CHECK_HINTS[external.code] || external.code)}</span>
+     <div><small>${escapeHtml(external.detail || '')}</small></div>`;
 }
 
 function openDialog(row) {
@@ -318,32 +354,14 @@ $('#rules-table').addEventListener('click', async (e) => {
   }
 
   if (btn.dataset.act === 'check') {
-    // 结果放在独立的整行（colspan）里，避免撑宽「操作」列、拉伸表格
     const tbody = tr.parentElement;
-    tbody.querySelectorAll('tr.check-row').forEach((r) => r.remove());
-    const checkRow = document.createElement('tr');
-    checkRow.className = 'check-row';
-    const td = document.createElement('td');
-    td.colSpan = 6;
-    const box = document.createElement('div');
-    box.className = 'check-result';
-    box.textContent = '检查中…';
-    td.append(box);
-    checkRow.append(td);
-    tr.after(checkRow);
+    tbody.querySelectorAll('tr.check-row').forEach((r) => r.remove()); // 单条自检清掉旧结果
+    upsertCheckRow(tr, { pending: true });
     try {
-      const { internal, external } = await api(`/api/rules/${row.id}/check`, { method: 'POST' });
-      const cls = external.code === 'OK' ? 'ok'
-        : ['NO_HOST', 'EGRESS_BLOCKED'].includes(external.code) ? 'unknown' : 'bad';
-      const internalPart = internal.ok
-        ? '内部检查通过'
-        : `内部检查未通过：${internal.problems.join('；')}`;
-      box.innerHTML =
-        `<span class="check ${internal.ok ? 'ok' : 'bad'}">${escapeHtml(internalPart)}</span>
-         <span class="check ${cls}">${escapeHtml(CHECK_HINTS[external.code] || external.code)}</span>
-         <div><small>${escapeHtml(external.detail || '')}</small></div>`;
+      const result = await api(`/api/rules/${row.id}/check`, { method: 'POST' });
+      upsertCheckRow(tr, result);
     } catch (err) {
-      box.textContent = err.message;
+      upsertCheckRow(tr, { error: err.message });
     }
   }
 });
@@ -360,6 +378,75 @@ $('#trash-table').addEventListener('click', async (e) => {
   } catch (err) {
     toast(err.message);
   }
+});
+
+// —— 批量自检：创建任务后每 1.5s 轮询，按行 id 渲染结果 ——
+let batchJobId = null;
+let batchTimer = null;
+
+function currentFilterParams() {
+  const p = {};
+  if (filters.host === '__global__') p.only_global = true;
+  else if (filters.host) p.host = filters.host;
+  if (filters.q) p.q = filters.q;
+  if (filters.by) p.by = filters.by;
+  return p;
+}
+
+function renderBatchProgress(job) {
+  const btn = $('#btn-batch-check');
+  btn.querySelector('.batch-progress').textContent = job ? `${job.done}/${job.total}` : '';
+  btn.disabled = !!job;
+}
+
+function finishBatch() {
+  clearInterval(batchTimer);
+  batchTimer = null;
+  batchJobId = null;
+  renderBatchProgress(null);
+}
+
+async function pollBatch() {
+  let job;
+  try {
+    job = await api(`/api/rules/batch-check/${batchJobId}`);
+  } catch (err) {
+    finishBatch();
+    toast(err.message);
+    return;
+  }
+  renderBatchProgress(job);
+  for (const r of job.results) {
+    const tr = $(`#rules-table tbody tr[data-id="${r.id}"]`);
+    if (tr) upsertCheckRow(tr, r);
+  }
+  if (job.status === 'done') {
+    finishBatch();
+    const bad = job.results.filter((r) => !(r.internal.ok && r.external.code === 'OK')).length;
+    toast(`批量自检完成：通过 ${job.total - bad}，异常 ${bad}`);
+  }
+}
+
+$('#btn-batch-check').addEventListener('click', async () => {
+  if (batchJobId) return; // 任务进行中
+  const count = $$('#rules-table tbody tr[data-id]').length;
+  if (count === 0) return toast('当前筛选没有规则');
+  const ok = await confirmDialog({
+    title: '批量自检',
+    message: `将对当前筛选的 ${count} 条规则完整自检（内部检查 + 外部请求），可能耗时。`,
+    okText: '开始自检',
+  });
+  if (!ok) return;
+  let job;
+  try {
+    job = await api('/api/rules/batch-check', { method: 'POST', body: currentFilterParams() });
+  } catch (err) {
+    return toast(err.message);
+  }
+  batchJobId = job.id;
+  renderBatchProgress({ done: 0, total: job.total });
+  $$('#rules-table tbody tr[data-id]').forEach((tr) => upsertCheckRow(tr, { pending: true }));
+  batchTimer = setInterval(pollBatch, 1500);
 });
 
 // —— 拖拽导入 ——
