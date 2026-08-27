@@ -747,7 +747,9 @@ git commit -m "feat: 规则匹配升级为模式+优先级，新增回收站彻�
     createFile(db, { host: '*.a.com', filename: 'p.txt', content: 'v', userId: 1 });
     createFile(db, { host: '*.b.com', filename: 'q.txt', content: 'v', userId: 1 });
     const rows = listFiles(db, { host: 'x.a.com' });
-    expect(rows.map((r) => r.filename).sort()).toEqual(['one.txt', 'p.txt']);
+    // 注：beforeEach 预置的 one.txt 是精确域名 a.com，既不等于 x.a.com 也不含 *，
+    // 不会成为 SQL 候选行，故期望只有命中模式 p.txt
+    expect(rows.map((r) => r.filename).sort()).toEqual(['p.txt']);
   });
 ```
 
@@ -1157,7 +1159,9 @@ import { isPattern, patternIntersects, compareRules } from './hostmatch.js';
       WHERE filename = ? AND deleted_at IS NULL AND id != ?
     `).all(file.filename, file.id);
     for (const o of others) {
-      if (patternIntersects(o.host === '' ? '*' : o.host, pattern) && compareRules(o, file) < 0) {
+      // 两侧 host 都归一化后再比较——否则 file.host 为 '' 时 specificity 按 3（精确档）算，遮蔽者会排输
+      if (patternIntersects(o.host === '' ? '*' : o.host, pattern)
+        && compareRules({ ...o, host: o.host === '' ? '*' : o.host }, { ...file, host: pattern }) < 0) {
         problems.push(`在部分域名上命中的不是这条记录，而是 id=${o.id}（host=${o.host} 优先）`);
       }
     }
