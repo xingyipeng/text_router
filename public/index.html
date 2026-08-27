@@ -201,7 +201,7 @@
             <svg id="dash-trend" viewBox="0 0 600 300" preserveAspectRatio="none"></svg>
             <p class="empty" id="dash-trend-empty" hidden>暂无请求数据</p>
           </div>
-          <div class="dash-panel">
+          <div class="dash-panel dash-domains">
             <h2>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>
               域名分布
@@ -225,7 +225,10 @@
             <div id="dash-recent-list"></div>
           </div>
         </div>
-        <p class="hint">请求统计来自内存记录，服务重启后清零；路由统计来自数据库。</p>
+        <p class="hint dash-hint">
+          <span>请求统计来自内存记录，服务重启后清零；路由统计来自数据库。</span>
+          <span class="dash-credit">TextRoute · MooLan</span>
+        </p>
       </div>
 
       <div id="panel-rules" class="panel">

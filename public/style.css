@@ -222,6 +222,9 @@ label.inline input[type="number"] { border: none; padding: 4px 8px; }
 .warn .link { padding: 0 4px; font-size: 12.5px; color: var(--warn); text-decoration: underline; }
 .warn .link:hover { background: rgba(180, 83, 9, .1); }
 .hint { color: var(--text-3); font-size: 12px; }
+/* 看板底部提示行：左侧说明、右侧归属，去掉 p 默认上下边距 */
+.dash-hint { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin: 0; }
+.dash-credit { flex-shrink: 0; }
 
 /* ============================================================
    主布局：左侧固定导航 + 顶部页头
@@ -318,7 +321,9 @@ label.inline input[type="number"] { border: none; padding: 4px 8px; }
 }
 .top-menu button:hover { color: var(--primary); background: var(--primary-weak); }
 
-.layout { margin-left: var(--side-w); min-height: 100vh; display: flex; flex-direction: column; }
+/* 确定高度 100vh（不用 min-height）：让 main→面板→网格的 flex 链拿到确定高度，
+   看板才能恰好铺满视口；内容放不下时由 main 内部滚动兜底 */
+.layout { margin-left: var(--side-w); height: 100vh; display: flex; flex-direction: column; }
 
 .topbar {
   position: sticky; top: 0; z-index: 30;
@@ -348,7 +353,7 @@ label.inline input[type="number"] { border: none; padding: 4px 8px; }
 .top-links .tab.active { color: var(--primary); }
 .top-links .icon-btn svg { width: 17px; height: 17px; }
 
-main { flex: 1; display: flex; flex-direction: column; padding: 24px 28px 24px; max-width: 1500px; width: 100%; margin: 0 auto; }
+main { flex: 1; display: flex; flex-direction: column; padding: 16px 24px 8px; width: 100%; min-height: 0; overflow-y: auto; }
 .panel { animation: panelIn .28s ease; }
 
 @keyframes panelIn { from { opacity: 0; transform: translateY(6px); } }
@@ -358,7 +363,7 @@ main { flex: 1; display: flex; flex-direction: column; padding: 24px 28px 24px; 
    看板
    ============================================================ */
 /* 看板撑满视口高度：面板列纵向铺开，最近请求吸收剩余空间 */
-#panel-dashboard:not([hidden]) { flex: 1; display: flex; flex-direction: column; }
+#panel-dashboard:not([hidden]) { flex: 1; display: flex; flex-direction: column; min-height: 0; }
 .dash-cards {
   display: grid; grid-template-columns: repeat(auto-fit, minmax(205px, 1fr));
   gap: 14px; margin-bottom: 16px;
@@ -398,7 +403,9 @@ main { flex: 1; display: flex; flex-direction: column; padding: 24px 28px 24px; 
 .dash-card.bad .dash-value { color: var(--bad); }
 .dash-card.bad .dash-icon { background: var(--bad-bg); color: var(--bad); }
 
-.dash-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 14px; margin-bottom: 14px; position: relative; }
+/* flex:1 撑满面板剩余高度；行高 1fr auto —— 底部模块固定 330px，上排（趋势+域名）吃满剩余，
+   看板整页恰为视口高度不滚动；内容超出（很矮的屏幕）时回落为自然滚动 */
+.dash-grid { flex: 1; display: grid; grid-template-columns: 2fr 1fr; grid-template-rows: 1fr auto; gap: 14px; margin-bottom: 6px; position: relative; min-height: 0; }
 .dash-panel {
   background: var(--surface); border: 1px solid var(--border);
   border-radius: 14px; padding: 18px 20px; box-shadow: var(--shadow-sm);
@@ -411,7 +418,8 @@ main { flex: 1; display: flex; flex-direction: column; padding: 24px 28px 24px; 
   font-size: 13.5px; font-weight: 600; color: #15233a; margin-bottom: 14px;
 }
 .dash-panel h2 svg { width: 15px; height: 15px; color: var(--primary); }
-#dash-trend { width: 100%; height: 350px; display: block; }
+/* 填满面板剩余高度：2×2 行高由右列决定，固定高度会在面板底部留白 */
+#dash-trend { width: 100%; flex: 1; min-height: 300px; display: block; }
 #dash-trend-empty { flex: 1; display: grid; place-items: center; margin: 0; }
 .trend-label { fill: var(--text-3); font-size: 10.5px; }
 .trend-grid { stroke: #eef1f6; stroke-width: 1; }
@@ -437,7 +445,16 @@ main { flex: 1; display: flex; flex-direction: column; padding: 24px 28px 24px; 
 @keyframes donutIn { from { opacity: 0; transform: scale(.9) rotate(-14deg); } }
 .donut-total { font-size: 21px; font-weight: 700; fill: #15233a; font-variant-numeric: tabular-nums; }
 .donut-cap { font-size: 10px; fill: var(--text-3); }
-.domain-legend { display: grid; gap: 7px; max-height: 160px; overflow-y: auto; padding-right: 4px; }
+.domain-legend { display: grid; gap: 7px; padding-right: 4px; }
+/* 域名分布面板整体滚动：域名/规则多时在面板内滚，不再溢出；
+   去掉图例各自的 max-height，避免面板+图例双层滚动条 */
+.dash-domains { overflow-y: auto; scrollbar-width: thin; scrollbar-color: transparent transparent; }
+.dash-domains:hover { scrollbar-color: var(--border-strong) transparent; }
+.dash-domains::-webkit-scrollbar { width: 6px; }
+.dash-domains::-webkit-scrollbar-thumb { background: transparent; border-radius: 4px; }
+.dash-domains:hover::-webkit-scrollbar-thumb { background: var(--border-strong); }
+.dash-domains::-webkit-scrollbar-track { background: transparent; }
+.dash-domains .domain-legend { max-height: none; overflow: visible; }
 .domain-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .domain-dot { width: 9px; height: 9px; border-radius: 3px; flex-shrink: 0; }
 .domain-host {
@@ -453,7 +470,7 @@ main { flex: 1; display: flex; flex-direction: column; padding: 24px 28px 24px; 
 
 /* 路径统计：右列第二行 + 条形列表，未命中标红
    行/列都显式指定：稀疏自动放置的游标会越过左列第二行，只定列会让最近请求落到第三行 */
-.dash-paths { grid-row: 2; grid-column: 2; min-height: 0; justify-content: flex-start; }
+.dash-paths { grid-row: 2; grid-column: 2; min-height: clamp(220px, 33vh, 420px); justify-content: flex-start; }
 .path-row { display: flex; align-items: center; gap: 12px; padding: 5px 0; }
 .path-row + .path-row { border-top: 1px dashed var(--border); }
 .path-name {
@@ -473,7 +490,7 @@ main { flex: 1; display: flex; flex-direction: column; padding: 24px 28px 24px; 
 }
 
 /* 最近请求预览（2×2 网格左列第二行；列表均分消化与右列的高度差） */
-.dash-recent { grid-row: 2; grid-column: 1; flex: 1; justify-content: flex-start; min-height: 0; padding: 14px 20px 10px; }
+.dash-recent { grid-row: 2; grid-column: 1; flex: 1; justify-content: flex-start; min-height: clamp(220px, 33vh, 420px); padding: 14px 20px 10px; }
 .dash-recent h2 { margin-bottom: 8px; }
 #dash-recent-list { flex: 1; display: flex; flex-direction: column; justify-content: space-around; }
 #btn-recent-all { margin-left: auto; }
