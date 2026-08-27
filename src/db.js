@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS verify_files (
   filename   TEXT    NOT NULL,
   content    TEXT    NOT NULL,
   note       TEXT    NOT NULL DEFAULT '',
+  priority   INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL,
   created_by INTEGER,
   updated_at INTEGER NOT NULL,
@@ -62,11 +63,23 @@ CREATE TABLE IF NOT EXISTS settings (
 );
 `;
 
+// 幂等迁移：旧库补 priority 列 + 存量全局记录 '' → '*'。
+// UPDATE OR IGNORE 兜底：旧库若已有同 filename 的字面 '*' 活跃行，
+// '' → '*' 会撞唯一索引，此时跳过该行（匹配层仍把 '' 当全局处理，行为不变）。
+function migrateSchema(db) {
+  const cols = db.prepare('PRAGMA table_info(verify_files)').all().map((c) => c.name);
+  if (!cols.includes('priority')) {
+    db.exec('ALTER TABLE verify_files ADD COLUMN priority INTEGER NOT NULL DEFAULT 0');
+  }
+  db.prepare("UPDATE OR IGNORE verify_files SET host = '*' WHERE host = ''").run();
+}
+
 export function openDb(dbPath) {
   mkdirSync(dirname(dbPath), { recursive: true });
   const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
   db.pragma('foreign_keys = ON');
   db.exec(SCHEMA);
+  migrateSchema(db);
   return db;
 }

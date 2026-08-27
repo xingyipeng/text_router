@@ -1,3 +1,4 @@
+import Database from 'better-sqlite3';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -61,6 +62,82 @@ describe('openDb', () => {
       VALUES (?,?,?,?,?)`);
     ins.run('a.com', 'x.txt', 'v1', 1, 1);
     expect(() => ins.run('b.com', 'x.txt', 'v2', 2, 2)).not.toThrow();
+  });
+
+  it('旧库迁移：补 priority 列并把空 host 转为 *', () => {
+    db.close(); // 先关掉 beforeEach 开的库，重建旧格式库
+    const path = join(dir, 'test.db');
+    rmSync(path, { force: true });
+    const legacy = new Database(path);
+    legacy.exec(`
+      CREATE TABLE verify_files (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        host TEXT NOT NULL DEFAULT '',
+        filename TEXT NOT NULL,
+        content TEXT NOT NULL,
+        note TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL,
+        created_by INTEGER,
+        updated_at INTEGER NOT NULL,
+        updated_by INTEGER,
+        deleted_at INTEGER,
+        deleted_by INTEGER
+      );
+      CREATE UNIQUE INDEX idx_active_host_filename
+        ON verify_files(host, filename) WHERE deleted_at IS NULL;
+      INSERT INTO verify_files (host, filename, content, note, created_at, updated_at) VALUES
+        ('', 'g.txt', 'g', '', 1, 1),
+        ('a.com', 'x.txt', 'v', '', 1, 1),
+        ('*', 'k.txt', 'k', '', 1, 1);
+    `);
+    legacy.close();
+    db = openDb(path); // 迁移入口
+
+    const cols = db.prepare('PRAGMA table_info(verify_files)').all().map((c) => c.name);
+    expect(cols).toContain('priority');
+    const hosts = db.prepare('SELECT host, filename FROM verify_files ORDER BY filename').all();
+    expect(hosts).toEqual([
+      { host: '*', filename: 'g.txt' },
+      { host: '*', filename: 'k.txt' },
+      { host: 'a.com', filename: 'x.txt' },
+    ]);
+    expect(db.prepare('SELECT priority FROM verify_files').all()
+      .every((r) => r.priority === 0)).toBe(true);
+  });
+
+  it('旧库迁移：空 host 与已有字面 * 同 filename 冲突时跳过转换', () => {
+    db.close();
+    const path = join(dir, 'test.db');
+    rmSync(path, { force: true });
+    const legacy = new Database(path);
+    legacy.exec(`
+      CREATE TABLE verify_files (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        host TEXT NOT NULL DEFAULT '',
+        filename TEXT NOT NULL,
+        content TEXT NOT NULL,
+        note TEXT NOT NULL DEFAULT '',
+        created_at INTEGER NOT NULL,
+        created_by INTEGER,
+        updated_at INTEGER NOT NULL,
+        updated_by INTEGER,
+        deleted_at INTEGER,
+        deleted_by INTEGER
+      );
+      CREATE UNIQUE INDEX idx_active_host_filename
+        ON verify_files(host, filename) WHERE deleted_at IS NULL;
+      INSERT INTO verify_files (host, filename, content, note, created_at, updated_at) VALUES
+        ('*', 'k.txt', 'star', '', 1, 1),
+        ('', 'k.txt', 'empty', '', 1, 1);
+    `);
+    legacy.close();
+    db = openDb(path);
+
+    const rows = db.prepare('SELECT host, content FROM verify_files ORDER BY content').all();
+    expect(rows).toEqual([
+      { host: '', content: 'empty' }, // 撞唯一索引，保持原样（匹配层仍按全局处理）
+      { host: '*', content: 'star' },
+    ]);
   });
 });
 
