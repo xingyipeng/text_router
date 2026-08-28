@@ -226,7 +226,7 @@
           </div>
         </div>
         <p class="hint dash-hint">
-          <span>请求统计来自内存记录，服务重启后清零；路由统计来自数据库。</span>
+          <span>看板实时统计来自内存，重启后清零；完整请求日志已持久化（见「请求记录」）；路由统计来自数据库。</span>
           <span class="dash-credit">TextRoute · MooLan</span>
         </p>
       </div>
@@ -383,8 +383,8 @@
           </div>
           <div class="table-card">
             <h2>请求记录</h2>
-            <label class="row">容量 <input type="number" id="s-log-capacity" min="50" max="5000" aria-label="请求记录容量"> 条</label>
-            <p class="hint">仅存于内存，重启即清空；改小后立即裁剪</p>
+            <label class="row">日志最大保留条数 <input type="number" id="s-log-capacity" min="50" max="5000" aria-label="请求记录容量"> 条</label>
+            <p class="hint">内存实时统计与持久化日志共用此上限；超出自动删最旧，改小后立即裁剪</p>
           </div>
           <div class="toolbar">
             <button type="submit" id="btn-save-settings" class="btn primary">保存设置</button>
@@ -400,12 +400,15 @@
             <span>刷新</span>
           </button>
           <button id="btn-clear-requests" class="btn">清空</button>
-          <span class="hint">仅存于内存，重启即清空；容量可在「设置」中调整</span>
+          <button id="btn-req-prev" class="btn" disabled>‹ 上一页</button>
+          <button id="btn-req-next" class="btn" disabled>下一页 ›</button>
+          <span id="req-total" class="hint"></span>
+          <span class="hint">日志持久化保存；超出容量自动清理最旧记录</span>
         </div>
         <div class="table-card">
           <table id="requests-table">
             <thead><tr>
-              <th>时间</th><th>Host 头</th><th>X-Forwarded-Host</th><th>解析后</th><th>路径</th><th>结果</th>
+              <th>时间</th><th>完整 URL</th><th>结果</th><th>操作</th>
             </tr></thead>
             <tbody></tbody>
           </table>
@@ -556,6 +559,33 @@
     <menu>
       <button value="cancel" type="button" id="prompt-cancel" class="btn">取消</button>
       <button value="ok" type="button" id="prompt-ok" class="btn primary">确定</button>
+    </menu>
+  </form>
+</dialog>
+
+<dialog id="req-detail-dialog">
+  <form method="dialog" class="dialog-form">
+    <h2>请求详情</h2>
+    <div class="req-detail-grid">
+      <span class="rd-label">完整 URL</span>
+      <div class="rd-url-wrap">
+        <span id="rd-url" class="rd-value mono"></span>
+        <button type="button" id="btn-rd-copy" class="btn sm">复制</button>
+      </div>
+      <span class="rd-label">时间</span><span id="rd-at" class="rd-value mono"></span>
+      <span class="rd-label">方法</span><span id="rd-method" class="rd-value mono"></span>
+      <span class="rd-label">协议</span><span id="rd-scheme" class="rd-value mono"></span>
+      <span class="rd-label">Host 头</span><span id="rd-host" class="rd-value mono"></span>
+      <span class="rd-label">X-Forwarded-Host</span><span id="rd-fwd" class="rd-value mono"></span>
+      <span class="rd-label">解析后 host</span><span id="rd-resolved" class="rd-value mono"></span>
+      <span class="rd-label">路径</span><span id="rd-path" class="rd-value mono"></span>
+      <span class="rd-label">User-Agent</span><span id="rd-ua" class="rd-value mono"></span>
+      <span class="rd-label">客户端 IP（XFF）</span><span id="rd-ip" class="rd-value mono"></span>
+      <span class="rd-label">直连 IP（TCP 来源）</span><span id="rd-remote" class="rd-value mono"></span>
+      <span class="rd-label">结果</span><span id="rd-hit" class="rd-value"></span>
+    </div>
+    <menu>
+      <button class="btn">关闭</button>
     </menu>
   </form>
 </dialog>

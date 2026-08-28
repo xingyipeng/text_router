@@ -61,6 +61,24 @@ CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS requests (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  at             INTEGER NOT NULL,
+  host           TEXT    NOT NULL DEFAULT '',
+  forwarded_host TEXT    NOT NULL DEFAULT '',
+  resolved_host  TEXT    NOT NULL DEFAULT '',
+  path           TEXT    NOT NULL DEFAULT '',
+  filename       TEXT    NOT NULL DEFAULT '',
+  scheme         TEXT    NOT NULL DEFAULT '',
+  method         TEXT    NOT NULL DEFAULT '',
+  ua             TEXT    NOT NULL DEFAULT '',
+  ip             TEXT    NOT NULL DEFAULT '',
+  remote_ip      TEXT    NOT NULL DEFAULT '',
+  hit            INTEGER NOT NULL DEFAULT 0,
+  file_id        INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_requests_id ON requests(id);
 `;
 
 // 幂等迁移：旧库补 priority 列 + 存量全局记录 '' → '*'。
@@ -72,6 +90,12 @@ function migrateSchema(db) {
     db.exec('ALTER TABLE verify_files ADD COLUMN priority INTEGER NOT NULL DEFAULT 0');
   }
   db.prepare("UPDATE OR IGNORE verify_files SET host = '*' WHERE host = ''").run();
+
+  // 中间版本建过 requests 表（无 remote_ip 列）的库补列；新库由 SCHEMA 直接建全列
+  const reqCols = db.prepare('PRAGMA table_info(requests)').all().map((c) => c.name);
+  if (reqCols.length && !reqCols.includes('remote_ip')) {
+    db.exec("ALTER TABLE requests ADD COLUMN remote_ip TEXT NOT NULL DEFAULT ''");
+  }
 }
 
 export function openDb(dbPath) {

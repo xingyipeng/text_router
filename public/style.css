@@ -679,6 +679,20 @@ dialog[open] { animation: dialogIn .24s cubic-bezier(.16, 1, .3, 1); }
 .dialog-form {
   display: grid; gap: 15px; padding: 26px 26px 22px; margin: 0;
 }
+/* 请求详情弹窗 */
+#req-detail-dialog { width: min(560px, calc(100vw - 32px)); }
+.req-detail-grid {
+  display: grid; grid-template-columns: max-content 1fr;
+  gap: 7px 16px; align-items: baseline; max-height: 55vh; overflow-y: auto;
+}
+.rd-label { font-size: 12px; color: var(--text-3); white-space: nowrap; }
+.rd-value { font-size: 13px; color: var(--text); min-width: 0; overflow-wrap: anywhere; }
+.rd-url-wrap { display: flex; gap: 8px; align-items: center; min-width: 0; }
+#rd-url { flex: 1; }
+.rd-url-wrap .btn { flex-shrink: 0; }
+/* 请求记录表格：完整 URL 列省略号截断 */
+.td-url { max-width: 460px; }
+.req-url { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .dialog-form h2 { font-size: 18px; color: #15233a; padding-bottom: 14px;
   border-bottom: 1px solid var(--border); }
 .dialog-form label { gap: 7px; display: block; }

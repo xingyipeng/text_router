@@ -145,7 +145,8 @@ describe('GET /api/request-log', () => {
 
     const res = await app.request('/api/request-log',
       { headers: { host: 'admin.local', cookie } });
-    const rows = await res.json();
+    const { rows, total } = await res.json();
+    expect(total).toBe(2);
     expect(rows[0].filename).toBe('second.txt');
     expect(rows[0].hit).toBe(false);
   });
@@ -177,14 +178,14 @@ describe('POST /api/request-log/clear', () => {
     const cookie = (login.headers.get('set-cookie') || '').split(';')[0];
 
     await app.request('/first.txt', { headers: { host: 'a.com' } });
-    expect(await (await app.request('/api/request-log',
-      { headers: { host: 'admin.local', cookie } })).json()).toHaveLength(1);
+    expect((await (await app.request('/api/request-log',
+      { headers: { host: 'admin.local', cookie } })).json()).total).toBe(1);
 
     const res = await app.request('/api/request-log/clear', {
       method: 'POST', headers: { host: 'admin.local', cookie },
     });
     expect(res.status).toBe(200);
-    expect(await (await app.request('/api/request-log',
-      { headers: { host: 'admin.local', cookie } })).json()).toHaveLength(0);
+    expect((await (await app.request('/api/request-log',
+      { headers: { host: 'admin.local', cookie } })).json()).total).toBe(0);
   });
 });

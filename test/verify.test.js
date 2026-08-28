@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { openDb } from '../src/db.js';
 import { createFile, softDeleteFile } from '../src/repo/rules.js';
+import { createUser } from '../src/repo/users.js';
 import { createRequestLog } from '../src/requestLog.js';
 import { createApp } from '../src/app.js';
 
@@ -268,5 +269,67 @@ describe('请求记录', () => {
     expect(entries).toHaveLength(1);
     expect(entries[0].filename).toBe('app.json');
     expect(entries[0].hit).toBe(true);
+  });
+
+  it('落库持久化：记录 ua/ip/method，XFF 取第一跳', async () => {
+    await get('/x.txt', 'a.com', {
+      'user-agent': 'TestBot/1.0',
+      'x-forwarded-for': '9.9.9.9, 10.0.0.1',
+    });
+    const rows = db.prepare('SELECT * FROM requests').all();
+    expect(rows).toHaveLength(1);
+    expect(rows[0].ua).toBe('TestBot/1.0');
+    expect(rows[0].ip).toBe('9.9.9.9');
+    expect(rows[0].method).toBe('GET');
+    expect(rows[0].path).toBe('/x.txt');
+    expect(rows[0].hit).toBe(0);
+    expect(typeof rows[0].remote_ip).toBe('string'); // 测试环境无真实 socket，记空串
+  });
+
+  it('持久化表超出容量删最旧（与内存同口径）', async () => {
+    const smallApp = createApp({
+      db, requestLog: createRequestLog(3),
+      config: { sessionTtlHours: 1, cookieSecure: false },
+    });
+    for (let i = 1; i <= 5; i++) {
+      await smallApp.request(`/${i}.txt`, { headers: { host: 'a.com' } });
+    }
+    const rows = db.prepare('SELECT path FROM requests ORDER BY id DESC').all();
+    expect(rows.map((r) => r.path)).toEqual(['/5.txt', '/4.txt', '/3.txt']);
+  });
+});
+
+describe('GET /api/request-log', () => {
+  const login = async (app) => {
+    createUser(db, { username: 'alice', password: 'password1234' });
+    const res = await app.request('/api/auth/login', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', host: 'admin.local' },
+      body: JSON.stringify({ username: 'alice', password: 'password1234' }),
+    });
+    return (res.headers.get('set-cookie') || '').split(';')[0];
+  };
+
+  it('分页查询持久化记录，before 取更早一页', async () => {
+    for (let i = 1; i <= 5; i++) {
+      await app.request(`/${i}.txt`, { headers: { host: 'a.com' } });
+    }
+    const cookie = await login(app);
+    const page1 = await (await app.request('/api/request-log?limit=2', { headers: { host: 'admin.local', cookie } })).json();
+    expect(page1.total).toBe(5);
+    expect(page1.rows.map((r) => r.path)).toEqual(['/5.txt', '/4.txt']);
+    expect(page1.hasMore).toBe(true);
+
+    const oldest = page1.rows[1].id;
+    const page2 = await (await app.request(`/api/request-log?before=${oldest}&limit=2`, { headers: { host: 'admin.local', cookie } })).json();
+    expect(page2.rows.map((r) => r.path)).toEqual(['/3.txt', '/2.txt']);
+  });
+
+  it('clear 同时清空库与内存', async () => {
+    await app.request('/x.txt', { headers: { host: 'a.com' } });
+    const cookie = await login(app);
+    await app.request('/api/request-log/clear', { method: 'POST', headers: { host: 'admin.local', cookie } });
+    expect(db.prepare('SELECT COUNT(*) AS n FROM requests').get().n).toBe(0);
+    expect(requestLog.list()).toHaveLength(0);
   });
 });

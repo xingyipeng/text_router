@@ -165,17 +165,23 @@ $('#users-table').addEventListener('click', async (e) => {
   }
 });
 
-// —— 请求记录面板 ——
+// —— 请求记录面板（持久化日志：完整 URL + 详情 + 分页）——
+
+let reqRows = []; // 当前页数据（详情弹窗取用）
+let reqBefore; // 当前页最旧一条的 id；undefined = 最新页
+const reqStack = []; // 「上一页」回退栈
 
 async function loadRequestLog() {
   const panel = $('#panel-requests');
   panel.classList.add('loading');
-  let rows;
+  let data;
   try {
-    rows = await api('/api/request-log');
+    data = await api(`/api/request-log?limit=200${reqBefore !== undefined ? `&before=${reqBefore}` : ''}`);
   } finally {
     panel.classList.remove('loading');
   }
+  const { rows, total, hasMore } = data;
+  reqRows = rows;
   const tbody = $('#requests-table tbody');
   tbody.innerHTML = '';
   $('#panel-requests .empty').hidden = rows.length > 0;
@@ -183,23 +189,93 @@ async function loadRequestLog() {
   rows.forEach((r, i) => {
     const tr = document.createElement('tr');
     tr.style.setProperty('--i', i); // 行入场错峰（纯展示）
+    const url = `${r.scheme || 'http'}://${r.resolvedHost || r.host}${r.path}`;
     tr.innerHTML = `
       <td>${fmtTime(r.at)}</td>
-      <td class="mono">${r.host ? escapeHtml(r.host) : '<em>无</em>'}</td>
-      <td class="mono">${r.forwardedHost ? escapeHtml(r.forwardedHost) : '<em>无</em>'}</td>
-      <td class="mono">${r.resolvedHost ? escapeHtml(r.resolvedHost) : '<em>空</em>'}</td>
-      <td class="mono">${escapeHtml(r.path)}</td>
-      <td><span class="check ${r.hit ? 'ok' : 'bad'}">${r.hit ? `命中 #${r.fileId}` : '未命中'}</span></td>`;
+      <td class="td-url"><span class="req-url mono" title="${escapeHtml(url)}">${escapeHtml(url)}</span></td>
+      <td><span class="check ${r.hit ? 'ok' : 'bad'}">${r.hit ? '命中' : '未命中'}</span></td>
+      <td><button type="button" class="btn sm" data-act="req-detail" data-id="${r.id}">详情</button></td>`;
     tbody.append(tr);
   });
+
+  $('#btn-req-prev').disabled = reqStack.length === 0;
+  $('#btn-req-next').disabled = !hasMore;
+  $('#req-total').textContent = total ? `共 ${total} 条` : '';
 }
 
-$('#btn-refresh-requests').addEventListener('click', loadRequestLog);
+$('#btn-refresh-requests').addEventListener('click', () => {
+  reqBefore = undefined; // 刷新回到最新一页
+  reqStack.length = 0;
+  loadRequestLog();
+});
+
+$('#btn-req-next').addEventListener('click', () => {
+  if (!reqRows.length) return;
+  reqStack.push(reqBefore);
+  reqBefore = reqRows[reqRows.length - 1].id;
+  loadRequestLog();
+});
+
+$('#btn-req-prev').addEventListener('click', () => {
+  reqBefore = reqStack.pop();
+  loadRequestLog();
+});
+
+// 详情弹窗：行数据已在列表 JSON 里，就地渲染
+function openReqDetail(r) {
+  const url = `${r.scheme || 'http'}://${r.resolvedHost || r.host}${r.path}`;
+  $('#rd-url').textContent = url;
+  $('#rd-url').title = url;
+  $('#rd-at').textContent = new Date(r.at).toLocaleString('zh-CN', { hour12: false });
+  $('#rd-method').textContent = r.method || '—';
+  $('#rd-scheme').textContent = r.scheme || '—';
+  $('#rd-host').textContent = r.host || '—';
+  $('#rd-fwd').textContent = r.forwardedHost || '—';
+  $('#rd-resolved').textContent = r.resolvedHost || '—';
+  $('#rd-path').textContent = r.path;
+  $('#rd-ua').textContent = r.ua || '—';
+  $('#rd-ip').textContent = r.ip || '—';
+  $('#rd-remote').textContent = r.remoteIp || '—';
+  $('#rd-hit').innerHTML = r.hit
+    ? `<span class="check ok">命中 #${r.fileId ?? ''}</span>`
+    : '<span class="check bad">未命中</span>';
+  $('#req-detail-dialog').showModal();
+}
+
+$('#requests-table tbody').addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-act="req-detail"]');
+  if (!btn) return;
+  const r = reqRows.find((x) => String(x.id) === btn.dataset.id);
+  if (r) openReqDetail(r);
+});
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    // http 环境 clipboard API 不可用时的降级
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.cssText = 'position:fixed;opacity:0;pointer-events:none';
+    document.body.append(ta);
+    ta.select();
+    let ok = false;
+    try { ok = document.execCommand('copy'); } catch { ok = false; }
+    ta.remove();
+    return ok;
+  }
+}
+
+$('#btn-rd-copy').addEventListener('click', async () => {
+  const ok = await copyText($('#rd-url').textContent);
+  toast(ok ? '完整 URL 已复制' : '复制失败，请手动选择复制');
+});
 
 $('#btn-clear-requests').addEventListener('click', async () => {
   const ok = await confirmDialog({
     title: '清空请求记录',
-    message: '将清空当前内存中的全部请求记录，此操作不可撤销。',
+    message: '将清空全部持久化请求记录与内存统计，此操作不可撤销。',
     okText: '清空',
     danger: true,
   });
@@ -207,6 +283,8 @@ $('#btn-clear-requests').addEventListener('click', async () => {
   try {
     await api('/api/request-log/clear', { method: 'POST' });
     toast('请求记录已清空');
+    reqBefore = undefined;
+    reqStack.length = 0;
     loadRequestLog();
   } catch (err) {
     toast(err.message);

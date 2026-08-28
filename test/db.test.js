@@ -139,6 +139,38 @@ describe('openDb', () => {
       { host: '*', content: 'star' },
     ]);
   });
+
+  it('旧库迁移：requests 表补 remote_ip 列（中间版本无此列）', () => {
+    db.close();
+    const path = join(dir, 'test.db');
+    rmSync(path, { force: true });
+    const legacy = new Database(path);
+    legacy.exec(`
+      CREATE TABLE requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        at INTEGER NOT NULL,
+        host TEXT NOT NULL DEFAULT '',
+        forwarded_host TEXT NOT NULL DEFAULT '',
+        resolved_host TEXT NOT NULL DEFAULT '',
+        path TEXT NOT NULL DEFAULT '',
+        filename TEXT NOT NULL DEFAULT '',
+        scheme TEXT NOT NULL DEFAULT '',
+        method TEXT NOT NULL DEFAULT '',
+        ua TEXT NOT NULL DEFAULT '',
+        ip TEXT NOT NULL DEFAULT '',
+        hit INTEGER NOT NULL DEFAULT 0,
+        file_id INTEGER
+      );
+      INSERT INTO requests (at, path) VALUES (1, '/old.txt');
+    `);
+    legacy.close();
+    db = openDb(path);
+
+    const cols = db.prepare('PRAGMA table_info(requests)').all().map((c) => c.name);
+    expect(cols).toContain('remote_ip');
+    const row = db.prepare('SELECT path, remote_ip FROM requests').get();
+    expect(row).toEqual({ path: '/old.txt', remote_ip: '' });
+  });
 });
 
 describe('migrateLegacyDb', () => {

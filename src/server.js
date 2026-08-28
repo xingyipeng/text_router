@@ -8,6 +8,7 @@ import { createApp } from './app.js';
 import { ensureSuperAdmin } from './init.js';
 import { startBackupScheduler } from './backup.js';
 import { getSettings } from './settings.js';
+import { trimRequests } from './repo/requests.js';
 import { deployConfig, envPresets } from './config.js';
 
 // 根目录存在 .env 时自动加载（等价 --env-file-if-missing=.env，但不挑 Node 小版本）。
@@ -61,9 +62,12 @@ try {
 
 // 请求记录容量按「DB 值 > env 初始默认 > 代码默认」算出有效值，启动即生效
 // （此前只读代码默认，DB 里存过容量也要等设置页再保存一次才生效）
-const requestLog = createRequestLog(
-  getSettings(db, { ...config.defaults, session: { ttl_hours: config.sessionTtlHours } }).requestlog.capacity
-);
+const requestLogCapacity = getSettings(
+  db, { ...config.defaults, session: { ttl_hours: config.sessionTtlHours } }
+).requestlog.capacity;
+const requestLog = createRequestLog(requestLogCapacity);
+// 持久化表同样按容量裁剪（停机期间容量改小或手动改库的兜底）
+trimRequests(db, requestLogCapacity);
 
 const app = createApp({ db, requestLog, config });
 

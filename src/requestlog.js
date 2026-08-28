@@ -14,6 +14,9 @@ export function createRequestLog(capacity = DEFAULT_CAPACITY) {
     clear() {
       items.length = 0;
     },
+    getCapacity() {
+      return current;
+    },
     // 运行时调整容量（设置页修改后立即生效），超出的旧记录直接裁剪
     setCapacity(n) {
       current = n;

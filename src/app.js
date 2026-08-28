@@ -30,7 +30,7 @@ export function createApp({ db, requestLog, config }) {
   app.route('/api/auth', createAuthRoutes({ db, config }));
   app.route('/api/rules', createRulesRoutes({ db, fetchImpl: config.fetchImpl }));
   app.route('/api/users', createUserRoutes({ db }));
-  app.route('/api/request-log', createRequestLogRoutes({ requestLog }));
+  app.route('/api/request-log', createRequestLogRoutes({ db, requestLog }));
   app.route('/api/stats', createStatsRoutes({ db, requestLog }));
   app.route('/api/backups', createBackupRoutes({ db, config }));
   app.route('/api/settings', createSettingsRoutes({ db, requestLog, config }));
