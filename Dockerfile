@@ -1,4 +1,4 @@
-FROM node:22-slim AS deps
+FROM crpi-1z575ueyebmvfwqg.cn-shanghai.personal.cr.aliyuncs.com/yujianpengpeng/text_router:base-node-22-slim AS deps
 WORKDIR /app
 RUN apt-get update \
  && apt-get install -y --no-install-recommends python3 make g++ \
@@ -6,7 +6,7 @@ RUN apt-get update \
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
-FROM node:22-slim
+FROM crpi-1z575ueyebmvfwqg.cn-shanghai.personal.cr.aliyuncs.com/yujianpengpeng/text_router:base-node-22-slim
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY package.json ./
