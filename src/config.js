@@ -14,6 +14,7 @@ export const DEPLOY = {
     backupDir: {env: 'BACKUP_DIR', default: './backups'},
     sessionTtlHours: {env: 'SESSION_TTL_HOURS', default: 168, parse: Number},
     cookieSecure: {env: 'COOKIE_SECURE', default: false, parse: (v) => v === 'true'},
+    selfcheckAllowedHosts: {env: 'SELFCHECK_ALLOWED_HOSTS', default: [], parse: (v) => v.split(',').map((h) => h.trim().toLowerCase()).filter(Boolean)},
     docsDir: {env: 'DOCS_DIR', default: './docs'},
     superAdminUser: {env: 'SUPER_ADMIN_USER', default: DEFAULT_SUPER_USER},
     superAdminPassword: {env: 'SUPER_ADMIN_PASSWORD', default: DEFAULT_SUPER_PASSWORD},

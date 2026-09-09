@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import {
   mkdirSync, readdirSync, renameSync, statSync, unlinkSync,
-  existsSync, copyFileSync,
+  existsSync, copyFileSync, openSync, closeSync,
 } from 'node:fs';
 import { join, basename } from 'node:path';
 import { SETTINGS } from './config.js';
@@ -40,8 +40,18 @@ export async function runBackup(db, dir, keep) {
   const base = join(dir, `text_router-${stamp()}`);
   let finalPath = `${base}.db`;
   let n = 1;
-  while (existsSync(finalPath)) finalPath = `${base}-${n++}.db`;
-  const tmpPath = `${finalPath}.tmp`;
+  let tmpPath;
+  for (;;) {
+    tmpPath = `${finalPath}.tmp`;
+    try {
+      if (existsSync(finalPath)) { finalPath = `${base}-${n++}.db`; continue; }
+      closeSync(openSync(tmpPath, 'wx')); // 原子占位，避免并行备份写同一个临时文件
+      break;
+    } catch (err) {
+      if (err.code !== 'EEXIST') throw err;
+      finalPath = `${base}-${n++}.db`;
+    }
+  }
 
   try {
     await db.backup(tmpPath); // 在线备份 API：服务正在写入也能拿到一致快照
@@ -101,12 +111,12 @@ export function getBackupSettings(db, defaults = {}) {
   return {
     enabled: map[B.enabled.dbKey] === '1' ? true
       : map[B.enabled.dbKey] === '0' ? false
-      : (defaults.enabled ?? B.enabled.default),
+      : (defaults.enabled === true || defaults.enabled === 'true' || defaults.enabled === '1'),
     time: B.time.pattern.test(map[B.time.dbKey] || '') ? map[B.time.dbKey]
       : B.time.pattern.test(defaults.time || '') ? defaults.time
       : B.time.default,
-    keep: Number.isInteger(Number(map[B.keep.dbKey])) && Number(map[B.keep.dbKey]) >= 1 ? Number(map[B.keep.dbKey])
-      : Number.isInteger(Number(defaults.keep)) && Number(defaults.keep) >= 1 ? Number(defaults.keep)
+    keep: Number.isInteger(Number(map[B.keep.dbKey])) && Number(map[B.keep.dbKey]) >= 1 && Number(map[B.keep.dbKey]) <= B.keep.range[1] ? Number(map[B.keep.dbKey])
+      : Number.isInteger(Number(defaults.keep)) && Number(defaults.keep) >= 1 && Number(defaults.keep) <= B.keep.range[1] ? Number(defaults.keep)
       : B.keep.default,
   };
 }
@@ -132,7 +142,7 @@ export function setBackupSettings(db, { enabled, time, keep }) {
 }
 
 // —— 定时备份调度 ——
-// state.lastRunMinute 在内存中：同一分钟只跑一次，防止 60s tick 与慢备份叠加重复执行。
+// 按本地日期和分钟去重，运行锁防止慢备份与下一次 tick 重叠。
 
 export async function maybeRunScheduledBackup({ db, dir, state, backupDefaults }, now = new Date()) {
   const settings = getBackupSettings(db, backupDefaults);
@@ -141,15 +151,19 @@ export async function maybeRunScheduledBackup({ db, dir, state, backupDefaults }
   const p = (x) => String(x).padStart(2, '0');
   const minute = `${p(now.getHours())}:${p(now.getMinutes())}`;
   if (minute !== settings.time) return { ran: false };
-  if (state.lastRunMinute === minute) return { ran: false };
+  const runKey = `${now.getFullYear()}-${p(now.getMonth() + 1)}-${p(now.getDate())} ${minute}`;
+  if (state.lastRunMinute === runKey || state.running) return { ran: false };
+  state.running = true;
 
   try {
     const result = await runBackup(db, dir, settings.keep);
-    state.lastRunMinute = minute;
+    state.lastRunMinute = runKey;
     return { ran: true, ...result };
   } catch (err) {
     console.error(`[backup] 定时备份失败：${err.message}`);
     return { ran: false };
+  } finally {
+    state.running = false;
   }
 }
 

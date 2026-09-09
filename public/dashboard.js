@@ -10,6 +10,7 @@ async function loadDashboard() {
     $('#dash-total-sub').textContent = `${s.files.bound} 个绑定域名 · ${s.files.global} 个全局`;
     $('#dash-active').textContent = s.files.bound;
     $('#dash-today').textContent = s.requests.today;
+    $('.dash-hint span').textContent = `请求统计仅覆盖本次启动后最近 ${s.requests.capacity} 条保留记录，超出容量会淘汰、重启后清零，并非全天总量；持久化记录见「请求记录」。`;
     $('#dash-hits').textContent = s.requests.todayHits;
     $('#dash-misses').textContent = s.requests.todayMisses;
     renderTrend(s.requests.byHour);

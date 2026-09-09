@@ -1,8 +1,7 @@
 import { $, $$, api, escapeHtml } from './app.js';
 
 // 帮助面板：左侧列出 docs/ 里的 markdown 文档（按子目录分组），右侧用 marked 渲染。
-// 内容来自服务器自身的 docs/ 文件（部署者可控），直接 innerHTML 不做 sanitize；
-// 若未来允许用户上传文档，这里必须加上 sanitize。
+// Markdown 渲染结果必须过滤脚本、事件属性和危险链接。
 
 let listLoaded = false;
 let loadPromise = null;
@@ -102,7 +101,7 @@ async function showDoc(id, group) {
     return;
   }
   marked.setOptions({ gfm: true });
-  box.innerHTML = marked.parse(doc.content);
+  box.innerHTML = DOMPurify.sanitize(marked.parse(doc.content), { USE_PROFILES: { html: true } });
 }
 
 // 切换到帮助面板并打开指定文档（规则对话框「?」入口）。

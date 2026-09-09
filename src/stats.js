@@ -66,13 +66,12 @@ export function computeStats(db, requestLog) {
 
   // 最近 24 小时按小时聚合，无请求的小时补零（旧→新）
   const curHour = Math.floor(now / HOUR_MS);
-  const byHour = [];
-  for (let i = 23; i >= 0; i--) {
-    const hourStart = (curHour - i) * HOUR_MS;
-    const count = entries.filter(
-      (e) => e.at >= hourStart && e.at < hourStart + HOUR_MS
-    ).length;
-    byHour.push({ hour: new Date(hourStart).getHours(), count });
+  const byHour = Array.from({ length: 24 }, (_, i) => ({
+    hour: new Date((curHour - 23 + i) * HOUR_MS).getHours(), count: 0,
+  }));
+  for (const e of entries) {
+    const i = Math.floor(e.at / HOUR_MS) - (curHour - 23);
+    if (i >= 0 && i < 24) byHour[i].count++;
   }
 
   return {
@@ -85,6 +84,8 @@ export function computeStats(db, requestLog) {
       byRuleHost,
     },
     requests: {
+      scope: 'retained_since_start',
+      capacity: requestLog.getCapacity(),
       total: entries.length,
       hits: entries.filter((e) => e.hit).length,
       today: today.length,

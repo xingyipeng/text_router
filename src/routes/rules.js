@@ -5,7 +5,7 @@ import {
 } from '../repo/rules.js';
 import { UniqueViolation } from '../repo/errors.js';
 import {
-  isValidFilename, normalizeHost, inspectContent, MAX_CONTENT_BYTES,
+  isValidFilename, isReservedPath, normalizeHost, inspectContent, MAX_CONTENT_BYTES,
 } from '../validate.js';
 import { requireAuth } from '../auth.js';
 import { normalizePattern, isValidPriority } from '../hostmatch.js';
@@ -18,6 +18,7 @@ function parsePayload(body) {
   if (!isValidFilename(filename)) {
     return { error: '路径不能为空、不能以 / 开头，总长不超过 255' };
   }
+  if (isReservedPath(filename)) return { error: '该路径为管理接口或应用资源保留，不能创建规则' };
   const content = body?.content;
   if (typeof content !== 'string') return { error: '内容必须是字符串' };
   if (Buffer.byteLength(content, 'utf8') > MAX_CONTENT_BYTES) {
@@ -46,7 +47,7 @@ function withInspect(row) {
   return { ...row, inspect: inspectContent(row.content) };
 }
 
-export function createRulesRoutes({ db, fetchImpl }) {
+export function createRulesRoutes({ db, fetchImpl, config = {} }) {
   const router = new Hono();
   router.use('*', requireAuth);
 
@@ -144,7 +145,8 @@ export function createRulesRoutes({ db, fetchImpl }) {
     });
     if (rows.length === 0) return c.json({ error: '当前筛选没有规则' }, 400);
     if (rows.length > 500) return c.json({ error: '规则超过 500 条，请缩小筛选范围后再批量自检' }, 400);
-    const id = createBatchCheck({ db, fetchImpl, rows });
+    const id = createBatchCheck({ db, fetchImpl, rows, defaults: config.defaults, allowedHosts: config.selfcheckAllowedHosts });
+    if (!id) return c.json({ error: '自检任务繁忙，请稍后重试' }, 429);
     return c.json({ id, total: rows.length }, 202);
   });
 
@@ -246,7 +248,8 @@ export function createRulesRoutes({ db, fetchImpl }) {
     const internal = runInternalCheck(db, file);
     const external = await runExternalCheck(file, {
       ...(fetchImpl ? { fetchImpl } : {}),
-      timeoutMs: getSettings(db).selfcheck.timeout_seconds * 1000, // 自检超时可在设置页调整
+      allowedHosts: config.selfcheckAllowedHosts,
+      timeoutMs: getSettings(db, config.defaults).selfcheck.timeout_seconds * 1000, // 自检超时可在设置页调整
     });
     return c.json({ internal, external });
   });

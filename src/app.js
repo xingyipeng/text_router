@@ -1,4 +1,6 @@
 import { Hono } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
+import { isReservedPath } from './validate.js';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { createVerifyHandler } from './verify.js';
 import { sessionMiddleware } from './auth.js';
@@ -17,18 +19,24 @@ export function createApp({ db, requestLog, config }) {
   // 校验文件响应：公开路径，不经过任何鉴权中间件。
   // 任意路径先查规则（路径不限制扩展名）：命中即返回；.txt 未命中 404 留痕；
   // 其余路径未命中返回 null 透传 next()，交给静态文件与 notFound。
+  const verify = createVerifyHandler({ db, requestLog });
   app.get('*', (c, next) => {
-    const res = createVerifyHandler({ db, requestLog })(c);
+    if (isReservedPath(c.req.path)) return next();
+    const res = verify(c);
     if (res === null) return next();
     return res;
   });
 
   app.use('/api/*', sessionMiddleware({ db }));
+  app.use('/api/*', (c, next) => {
+    if (c.req.path === '/api/backups/upload') return next();
+    return bodyLimit({ maxSize: 32 * 1024 * 1024 })(c, next);
+  });
 
   // 版本信息：公开接口（无需登录），供前端展示版本号与 console 横幅
   app.get('/api/version', (c) => c.json({ version: config.version ?? 'dev' }));
   app.route('/api/auth', createAuthRoutes({ db, config }));
-  app.route('/api/rules', createRulesRoutes({ db, fetchImpl: config.fetchImpl }));
+  app.route('/api/rules', createRulesRoutes({ db, fetchImpl: config.fetchImpl, config }));
   app.route('/api/users', createUserRoutes({ db }));
   app.route('/api/request-log', createRequestLogRoutes({ db, requestLog }));
   app.route('/api/stats', createStatsRoutes({ db, requestLog }));

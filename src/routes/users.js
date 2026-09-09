@@ -4,7 +4,7 @@ import {
   deleteUser, countActiveFilesByUser,
 } from '../repo/users.js';
 import { UniqueViolation } from '../repo/errors.js';
-import { MIN_PASSWORD_LENGTH } from '../validate.js';
+import { MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH } from '../validate.js';
 import { requireSuper } from '../auth.js';
 
 const USERNAME_RE = /^[A-Za-z0-9_.@-]{1,64}$/;
@@ -25,8 +25,8 @@ export function createUserRoutes({ db }) {
     if (typeof username !== 'string' || !USERNAME_RE.test(username)) {
       return c.json({ error: '用户名只能包含字母、数字、下划线、点、@ 和连字符，长度 1-64' }, 400);
     }
-    if (typeof password !== 'string' || password.length < MIN_PASSWORD_LENGTH) {
-      return c.json({ error: `密码至少 ${MIN_PASSWORD_LENGTH} 个字符` }, 400);
+    if (typeof password !== 'string' || password.length < MIN_PASSWORD_LENGTH || password.length > MAX_PASSWORD_LENGTH) {
+      return c.json({ error: `密码至少 ${MIN_PASSWORD_LENGTH} 个字符，最多 ${MAX_PASSWORD_LENGTH} 个字符` }, 400);
     }
 
     try {
@@ -121,8 +121,8 @@ export function createUserRoutes({ db }) {
     let body;
     try { body = await c.req.json(); } catch { return c.json({ error: 'bad request' }, 400); }
     const { new_password } = body || {};
-    if (typeof new_password !== 'string' || new_password.length < MIN_PASSWORD_LENGTH) {
-      return c.json({ error: `密码至少 ${MIN_PASSWORD_LENGTH} 个字符` }, 400);
+    if (typeof new_password !== 'string' || new_password.length < MIN_PASSWORD_LENGTH || new_password.length > MAX_PASSWORD_LENGTH) {
+      return c.json({ error: `密码至少 ${MIN_PASSWORD_LENGTH} 个字符，最多 ${MAX_PASSWORD_LENGTH} 个字符` }, 400);
     }
 
     setPassword(db, target.id, new_password);

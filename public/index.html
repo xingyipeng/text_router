@@ -165,10 +165,10 @@
               <span class="dash-icon">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
               </span>
-              <span class="dash-label">今日访问</span>
+              <span class="dash-label">今日留存</span>
             </div>
             <b class="dash-value" id="dash-today">–</b>
-            <span class="dash-sub">今日收到的请求</span>
+            <span class="dash-sub">最近保留记录中的今日请求</span>
           </div>
           <div class="dash-card ok" style="--i:3">
             <div class="dash-card-top">
@@ -178,7 +178,7 @@
               <span class="dash-label">成功转发</span>
             </div>
             <b class="dash-value" id="dash-hits">–</b>
-            <span class="dash-sub">今日命中规则的请求</span>
+            <span class="dash-sub">今日留存记录中的命中</span>
           </div>
           <div class="dash-card bad" style="--i:4">
             <div class="dash-card-top">
@@ -188,7 +188,7 @@
               <span class="dash-label">错误数量</span>
             </div>
             <b class="dash-value" id="dash-misses">–</b>
-            <span class="dash-sub">今日未命中的请求</span>
+            <span class="dash-sub">今日留存记录中的未命中</span>
           </div>
         </div>
 
@@ -196,7 +196,7 @@
           <div class="dash-panel">
             <h2>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-              访问趋势（24 小时）
+              留存请求趋势（24 小时）
             </h2>
             <svg id="dash-trend" viewBox="0 0 600 300" preserveAspectRatio="none"></svg>
             <p class="empty" id="dash-trend-empty" hidden>暂无请求数据</p>
@@ -226,7 +226,7 @@
           </div>
         </div>
         <p class="hint dash-hint">
-          <span>看板实时统计来自内存，重启后清零；完整请求日志已持久化（见「请求记录」）；路由统计来自数据库。</span>
+          <span>请求统计仅覆盖本次启动后最近保留的记录，超出容量会淘汰、重启后清零，并非全天总量；持久化记录见「请求记录」。</span>
           <span class="dash-credit">TextRoute · MooLan</span>
         </p>
       </div>
@@ -593,6 +593,7 @@
 <div id="toast" hidden role="status" aria-live="polite"></div>
 
 <script src="/vendor/marked.min.js"></script>
+<script src="/vendor/purify.min.js"></script>
 <script type="module" src="/main.js"></script>
 </body>
 </html>

@@ -19,7 +19,7 @@ export function createBackupRoutes({ db, config }) {
   router.use('*', requireSuper);
 
   // 注意：/settings 必须先于 /:name 注册，否则会被参数路由吞掉
-  router.get('/settings', (c) => c.json(getBackupSettings(db)));
+  router.get('/settings', (c) => c.json(getBackupSettings(db, config.defaults?.backup)));
 
   router.put('/settings', async (c) => {
     let body;
@@ -69,7 +69,7 @@ export function createBackupRoutes({ db, config }) {
 
   router.post('/', async (c) => {
     try {
-      const r = await runBackup(db, backupDir, getBackupSettings(db).keep);
+      const r = await runBackup(db, backupDir, getBackupSettings(db, config.defaults?.backup).keep);
       return c.json(r, 201);
     } catch (err) {
       return c.json({ error: `备份失败：${err.message}` }, 500);

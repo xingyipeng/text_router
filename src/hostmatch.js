@@ -22,27 +22,26 @@ export function mainDomain(host) {
   return h.split('.').filter((l) => l !== '*' && l !== '**').slice(-2).join('.');
 }
 
-// 回溯标签比较；k 个 ** 对上 n 个标签最坏 C(n+k,k) 条路径，
-// 但模式与 host 标签数都很小（规则行数量级），无需记忆化
-function matchFrom(pi, hi, p, h) {
-  if (pi === p.length) return hi === h.length;
-  const pl = p[pi];
-  if (pl === '**') {
-    for (let k = hi; k <= h.length; k++) {
-      if (matchFrom(pi + 1, k, p, h)) return true;
-    }
-    return false;
-  }
-  if (hi === h.length) return false;
-  if (pl === '*' || pl === h[hi]) return matchFrom(pi + 1, hi + 1, p, h);
-  return false;
-}
-
+// 动态规划：每个模式标签/主机标签状态只处理一次，O(m*n) 时间、O(n) 空间。
 export function matchHost(pattern, host) {
   const p = typeof pattern === 'string' ? pattern : '';
   const h = typeof host === 'string' ? host : '';
-  if (p === '*') return true; // 全局：命中所有（含空 host）
-  return matchFrom(0, 0, p.toLowerCase().split('.'), h === '' ? [] : h.toLowerCase().split('.'));
+  if (p === '*') return true;
+  if (p.length > 255 || h.length > 255) return false;
+  const labels = h === '' ? [] : h.toLowerCase().split('.');
+  let previous = Array(labels.length + 1).fill(false);
+  previous[0] = true;
+  for (const label of p.toLowerCase().split('.')) {
+    const current = Array(labels.length + 1).fill(false);
+    current[0] = label === '**' && previous[0];
+    for (let j = 1; j <= labels.length; j++) {
+      current[j] = label === '**'
+        ? previous[j] || current[j - 1]
+        : previous[j - 1] && (label === '*' || label === labels[j - 1]);
+    }
+    previous = current;
+  }
+  return previous[labels.length];
 }
 
 // 保存/导入时的校验 + 归一化。返回 { ok, value } 或 { ok, error }。

@@ -57,6 +57,10 @@ CREATE TABLE IF NOT EXISTS verify_files (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_active_host_filename
   ON verify_files(host, filename) WHERE deleted_at IS NULL;
 
+CREATE INDEX IF NOT EXISTS idx_active_filename
+  ON verify_files(filename) WHERE deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_sessions_expiry ON sessions(expires_at);
+
 CREATE TABLE IF NOT EXISTS settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL

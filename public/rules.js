@@ -479,8 +479,9 @@ async function pollBatch() {
     const tr = $(`#rules-table tbody tr[data-id="${r.id}"]`);
     if (tr) upsertCheckRow(tr, r);
   }
-  if (job.status === 'done') {
+  if (job.status === 'done' || job.status === 'failed') {
     finishBatch();
+    if (job.status === 'failed') { toast('批量自检失败，请重试'); return; }
     const bad = job.results.filter((r) => !(r.internal.ok && r.external.code === 'OK')).length;
     toast(`批量自检完成：通过 ${job.total - bad}，异常 ${bad}`);
   }

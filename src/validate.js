@@ -3,6 +3,7 @@
 // filename 只作为数据库键值参与匹配，不接触文件系统。
 export const MAX_CONTENT_BYTES = 4096;
 export const MIN_PASSWORD_LENGTH = 8;
+export const MAX_PASSWORD_LENGTH = 1024;
 export const MAX_FILENAME_LENGTH = 255;
 
 export function isValidFilename(name) {
@@ -41,4 +42,16 @@ export function cleanContent(content) {
   let s = typeof content === 'string' ? content : '';
   if (s.charCodeAt(0) === 0xfeff) s = s.slice(1);
   return s.replace(/\r\n/g, '\n').trim();
+}
+
+// 管理接口及应用资源独占路径，已有数据库中的冲突规则也不能覆盖它们。
+const APP_FILES = new Set([
+  '', 'index.html', 'app.js', 'main.js', 'rules.js', 'admin.js', 'dashboard.js',
+  'settings.js', 'backup.js', 'help.js', 'style.css', 'favicon.ico',
+]);
+export function isReservedPath(path) {
+  let name;
+  try { name = decodeURIComponent(path).replace(/^\//, ''); } catch { return true; }
+  return APP_FILES.has(name) || name === 'api' || name.startsWith('api/')
+    || name === 'vendor' || name.startsWith('vendor/');
 }

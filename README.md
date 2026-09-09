@@ -12,11 +12,13 @@
 
 text_router 用一个统一出口解决：把要托管的路径请求转发到它，按「域名 + 路径」匹配返回内容，请求实时留痕、命中可查、规则可多人管理、备份可恢复。
 
+当前版本：**1.0.7**，发布说明见 [CHANGELOG.md](CHANGELOG.md)。
+
 ## 功能特性
 
 - 路由规则全局生效或按域名绑定，支持 `*.example.com` / `**.example.com` 通配与手动优先级，路径不限制扩展名、支持任意深度子目录（如 `h5/xxx.txt`、`.well-known/assetlinks.json`）
 - 微信下载的校验文件直接**拖拽导入**，文件名内容自动填入
-- 实时看板：24 小时请求趋势、命中率、域名分布按主域名 / 按规则两种口径、最近请求预览（一键跳转完整记录）
+- 实时看板：最近保留记录的 24 小时请求趋势、命中率、域名分布按主域名 / 按规则两种口径、最近请求预览（一键跳转完整记录）
 - 两层自检：内部数据检查 + 外部真实请求验证，失败原因精确分类
 - 多用户两级权限、软删除回收站、操作留痕
 - 内置备份：在线快照、定时备份、一键恢复、上传恢复
@@ -57,7 +59,7 @@ cd text_router && cp .env.example .env   # 改掉 SUPER_ADMIN_PASSWORD
 docker compose up -d
 ```
 
-**裸机**（Node ≥ 22）：`npm install && SUPER_ADMIN_PASSWORD=xxx npm start`
+**裸机**（Node ≥ 22.12）：`npm install && SUPER_ADMIN_PASSWORD=xxx npm start`
 
 打开 `http://<服务器>:3000/`，超管默认用户名 `admin`（密码即上述环境变量；数据落在 `./data`，升级镜像不丢）。
 
@@ -76,7 +78,7 @@ crpi-1z575ueyebmvfwqg.cn-shanghai.personal.cr.aliyuncs.com/yujianpengpeng/text_r
 一条命令构建并推送双架构镜像（构建器自动创建，docker.io 已配置国内镜像源；构建缓存留存在本机 `multiarch` 构建器中，重复构建秒级复用）：
 
 ```bash
-scripts/build-docker.sh --push -t 你的仓库地址/text_router:1.0.5 -t 你的仓库地址/text_router:latest
+scripts/build-docker.sh --push -t 你的仓库地址/text_router:1.0.7 -t 你的仓库地址/text_router:latest
 ```
 
 只在本机试跑：`scripts/build-docker.sh --load`；更多选项见 `scripts/build-docker.sh --help`。
@@ -103,6 +105,7 @@ scripts/build-docker.sh --push -t 你的仓库地址/text_router:1.0.5 -t 你的
 | `DOCS_DIR` | `./docs` | 帮助面板文档目录 |
 | `REQUESTLOG_CAPACITY` | `2000` | 请求记录容量初始值（50-5000） |
 | `SELFCHECK_TIMEOUT_SECONDS` | `8` | 规则自检超时初始值（3-30） |
+| `SELFCHECK_ALLOWED_HOSTS` | 空 | 允许内网自检的精确域名/IP，逗号分隔，仅部署者可配置 |
 | `BACKUP_ENABLED` | `false` | 定时备份开关初始值 |
 | `BACKUP_TIME` | `23:00` | 备份时间初始值 |
 | `BACKUP_KEEP` | `7` | 备份保留份数初始值 |
@@ -115,6 +118,10 @@ scripts/build-docker.sh --push -t 你的仓库地址/text_router:1.0.5 -t 你的
 - **自检**：内部检查数据正确性（含「被全局规则遮蔽」检测），外部真实发起一次 HTTPS 请求验证链路；失败原因精确分类
 - **内容保护**：微信要求逐字节精确匹配，BOM / CRLF / 首尾空白只标黄警告，点「一键清理」才改动
 - **批量迁移**：规则可导出 JSON、导入合并（重复可选跳过或覆盖）
+- **保留路径**：`api` / `api/*`、`vendor` / `vendor/*` 及管理页面的静态资源由应用独占。新建、编辑、导入不能使用这些路径；旧库中的冲突规则也不再覆盖应用接口。
+- **安全自检**：默认仅请求公网 HTTPS 443，不跟随跳转，连接使用已校验的 DNS 地址；内网域名/IP 需写入 `SELFCHECK_ALLOWED_HOSTS` 白名单，仍校验 TLS 证书。响应最多 64 KiB。
+- **登录保护**：每账号每分钟最多 10 次尝试、进程每分钟最多 120 次、同时最多 8 次密码校验；超限返回 429。密码长度为 8–1024 字符。
+- **看板口径**：今日请求与 24 小时趋势仅统计本次启动后最近保留的记录，容量上限与请求日志设置一致；满容量淘汰、重启清零，不代表全天完整流量。
 - **子目录路径**：路径不限制格式（任意扩展名/字符均可，非空、总长 ≤255、不以 `/` 开头）；微信校验文件本身仍须根路径
 
 ## 权限与账号
@@ -151,11 +158,11 @@ CLI 与界面共用同一套逻辑（兼容 cron）：`node scripts/backup.js --
 ## 开发
 
 ```bash
-npm install && npm test   # 405 项测试全过（Node 22）
+npm install && npm test   # 包含安全与异常边界回归测试（Node ≥ 22.12）
 SUPER_ADMIN_PASSWORD=password1234 npm run dev
 ```
 
-切 Node 大版本后需 `npm rebuild better-sqlite3`（原生模块 ABI 绑定；Docker 不受影响）。前端原生 HTML/JS 无构建步骤，唯一第三方文件 `public/vendor/marked.min.js`（帮助面板 markdown 渲染，MIT）。前端无自动化测试，改动后手动验证；后端有完整测试。
+切 Node 大版本后需 `npm rebuild better-sqlite3`（原生模块 ABI 绑定；Docker 不受影响）。前端原生 HTML/JS 无构建步骤，帮助面板使用本地 `public/vendor/marked.min.js` 渲染 Markdown、`purify.min.js`（DOMPurify）过滤危险 HTML。测试覆盖后端与帮助文档 HTML 过滤；交互布局仍需浏览器验证。
 
 ## 架构
 

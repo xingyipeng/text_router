@@ -1,4 +1,6 @@
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { promisify } from 'node:util';
+import { MAX_PASSWORD_LENGTH } from './validate.js';
+import { randomBytes, scryptSync, scrypt, timingSafeEqual } from 'node:crypto';
 
 const SALT_BYTES = 16;
 const KEY_BYTES = 64;
@@ -21,4 +23,13 @@ export function verifyPassword(password, stored) {
 
   const actual = scryptSync(password, Buffer.from(saltHex, 'hex'), KEY_BYTES);
   return timingSafeEqual(actual, expected);
+}
+
+const scryptAsync = promisify(scrypt);
+export async function verifyPasswordAsync(password, stored) {
+  if (typeof password !== 'string' || password.length > MAX_PASSWORD_LENGTH) return false;
+  if (typeof stored !== 'string' || !/^[0-9a-f]{32}:[0-9a-f]{128}$/.test(stored)) return false;
+  const [saltHex, keyHex] = stored.split(':');
+  const actual = await scryptAsync(password, Buffer.from(saltHex, 'hex'), KEY_BYTES);
+  return timingSafeEqual(actual, Buffer.from(keyHex, 'hex'));
 }

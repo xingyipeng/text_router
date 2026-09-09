@@ -1,5 +1,5 @@
 import { countUsers, createUser } from './repo/users.js';
-import { MIN_PASSWORD_LENGTH } from './validate.js';
+import { MIN_PASSWORD_LENGTH, MAX_PASSWORD_LENGTH } from './validate.js';
 import { hashPassword } from './password.js';
 import { DEFAULT_SUPER_USER, DEFAULT_SUPER_PASSWORD } from './config.js';
 
@@ -12,8 +12,8 @@ export function ensureSuperAdmin(db, { username, password } = {}) {
   const finalPassword = password || DEFAULT_SUPER_PASSWORD;
 
   // 默认密码 admin123 恰好满足 8 位下限；显式设置的密码同样受此约束
-  if (finalPassword.length < MIN_PASSWORD_LENGTH) {
-    throw new Error(`SUPER_ADMIN_PASSWORD 至少需要 ${MIN_PASSWORD_LENGTH} 个字符`);
+  if (finalPassword.length < MIN_PASSWORD_LENGTH || finalPassword.length > MAX_PASSWORD_LENGTH) {
+    throw new Error(`SUPER_ADMIN_PASSWORD 至少需要 ${MIN_PASSWORD_LENGTH} 个字符，最多 ${MAX_PASSWORD_LENGTH} 个字符`);
   }
 
   createUser(db, {
@@ -24,8 +24,8 @@ export function ensureSuperAdmin(db, { username, password } = {}) {
 }
 
 export function resetSuperPassword(db, newPassword) {
-  if (typeof newPassword !== 'string' || newPassword.length < MIN_PASSWORD_LENGTH) {
-    throw new Error(`新密码至少需要 ${MIN_PASSWORD_LENGTH} 个字符`);
+  if (typeof newPassword !== 'string' || newPassword.length < MIN_PASSWORD_LENGTH || newPassword.length > MAX_PASSWORD_LENGTH) {
+    throw new Error(`新密码至少需要 ${MIN_PASSWORD_LENGTH} 个字符，最多 ${MAX_PASSWORD_LENGTH} 个字符`);
   }
 
   const su = db.prepare('SELECT id, username FROM users WHERE is_super = 1 ORDER BY id LIMIT 1').get();
