@@ -12,7 +12,7 @@
 
 text_router 用一个统一出口解决：把要托管的路径请求转发到它，按「域名 + 路径」匹配返回内容，请求实时留痕、命中可查、规则可多人管理、备份可恢复。
 
-当前版本：**1.0.7**，发布说明见 [CHANGELOG.md](CHANGELOG.md)。
+当前版本：**1.0.8**，发布说明见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 功能特性
 
@@ -78,7 +78,7 @@ crpi-1z575ueyebmvfwqg.cn-shanghai.personal.cr.aliyuncs.com/yujianpengpeng/text_r
 一条命令构建并推送双架构镜像（构建器自动创建，docker.io 已配置国内镜像源；构建缓存留存在本机 `multiarch` 构建器中，重复构建秒级复用）：
 
 ```bash
-scripts/build-docker.sh --push -t 你的仓库地址/text_router:1.0.7 -t 你的仓库地址/text_router:latest
+scripts/build-docker.sh --push -t 你的仓库地址/text_router:1.0.8 -t 你的仓库地址/text_router:latest
 ```
 
 只在本机试跑：`scripts/build-docker.sh --load`；更多选项见 `scripts/build-docker.sh --help`。
